@@ -1,0 +1,78 @@
+// OWNER: lane A — Server Component
+import { getActor } from '@/lib/auth/dal'
+import { listCompanyOptions, listContacts } from '@/modules/crm/service'
+import { queryObject } from '@/modules/crm/repository'
+import { ContactListQuery } from '@/lib/contracts/crm'
+import { ContactTable } from '@/components/crm/ContactTable'
+import { Pagination } from '@/components/ui/Pagination'
+import { LinkButton } from '@/components/ui/LinkButton'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { Field } from '@/components/ui/Field'
+import { Input } from '@/components/ui/Input'
+import { Select } from '@/components/ui/Select'
+import { Button } from '@/components/ui/Button'
+
+export default async function ContactsPage(props: PageProps<'/contacts'>) {
+  await getActor()
+  const sp = await props.searchParams
+  const values = queryObject(sp)
+  const parsed = ContactListQuery.safeParse(values)
+  const q = parsed.success ? parsed.data : ContactListQuery.parse({})
+
+  const [page, companies] = await Promise.all([listContacts(q), listCompanyOptions()])
+
+  const paginationParams: Record<string, string> = { ...values }
+  delete paginationParams.page
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-lg font-semibold text-slate-900">Contacts</h1>
+        <LinkButton href="/contacts/new">New contact</LinkButton>
+      </div>
+      <form
+        method="get"
+        action="/contacts"
+        className="grid grid-cols-2 gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-4"
+      >
+        <Field label="ค้นหา" htmlFor="q">
+          <Input id="q" name="q" defaultValue={values.q ?? ''} placeholder="ชื่อ, อีเมล, เบอร์โทร" />
+        </Field>
+        <Field label="บริษัท" htmlFor="companyId">
+          <Select id="companyId" name="companyId" defaultValue={values.companyId ?? ''}>
+            <option value="">ทั้งหมด</option>
+            {companies.map((company) => (
+              <option key={company.id} value={company.id}>
+                {company.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="LINE" htmlFor="hasLine">
+          <Select id="hasLine" name="hasLine" defaultValue={values.hasLine ?? ''}>
+            <option value="">ทั้งหมด</option>
+            <option value="true">มี LINE</option>
+            <option value="false">ไม่มี LINE</option>
+          </Select>
+        </Field>
+        <div className="col-span-full">
+          <Button type="submit">กรอง</Button>
+        </div>
+      </form>
+      {page.items.length === 0 ? (
+        <EmptyState title="ไม่พบ Contact" />
+      ) : (
+        <>
+          <ContactTable items={page.items} />
+          <Pagination
+            page={page.page}
+            pageSize={page.pageSize}
+            total={page.total}
+            basePath="/contacts"
+            params={paginationParams}
+          />
+        </>
+      )}
+    </div>
+  )
+}
