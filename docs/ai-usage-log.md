@@ -25,4 +25,35 @@ Newest entries go at the top.
 
 ## Log
 
-(No entries yet. Layer 0 and lane work start after this file is created.)
+### 2026-09-15, Lane A
+
+**Sample tasks / prompts**
+- Opening prompt from docs/tasks/lane-A.md: "Implement the CRM service bodies in modules/crm/service.ts
+  and modules/crm/repository.ts against the frozen signatures, then the auth and CRM API routes,
+  then the pages, then prisma/seed.ts. Work only inside the files this lane owns and stop to write
+  a contract change request instead of editing a frozen file."
+- The session ran as a planned pipeline: research brief, file-by-file plan, then implement, test,
+  and review for each phase. The plan was revised once so the seed ran before the API smoke test,
+  which needed seeded accounts to log in.
+- Verification the agents ran: typecheck, lint, 73 unit tests (mocked db), a live API smoke test
+  (17 checks) and a page render smoke test (17 checks) on a spare port, and the seed run twice to
+  prove it is idempotent (same row counts and the same md5 of lead rows).
+
+**What the human reviewed or rejected**
+- Pakorn approved keeping three colocated test files that the AGENTS.md ownership table does not
+  list: modules/crm/service.test.ts, components/crm/safe-next.test.ts, and
+  app/api/auth/login/route.test.ts.
+- Pakorn approved deleting the layer 0 placeholder app/page.tsx, which clashed with
+  app/(app)/page.tsx on the `/` route.
+- Pakorn accepted four assumptions the design did not settle: SALES users can only create leads
+  they own, any signed-in user may edit or delete contacts and companies, `tagIds` is supported in
+  the service with no UI yet, and seeded contacts use a WEBSITE 45 / MANUAL 40 / LINE 15 source mix.
+- Nothing was rejected.
+
+**One change made after human inspection**
+- None was requested by Pakorn in this session. For the record, the biggest change after review
+  came from the code-reviewer agent, not a human: `safeNext` (the post-login `next` redirect check)
+  first only rejected values starting with `//` or `/\`, so `/login?next=/%09/evil.com` and
+  `/login?next=/.//evil.com` could still send a user off-site. It now rejects control characters and
+  backslashes, resolves the value against a dummy origin, requires the same origin, and rejects a
+  resolved path that starts with `//`. Tests cover each bypass.
