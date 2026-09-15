@@ -50,10 +50,19 @@ Newest entries go at the top.
   the service with no UI yet, and seeded contacts use a WEBSITE 45 / MANUAL 40 / LINE 15 source mix.
 - Nothing was rejected.
 
+- Pakorn read the four non-blocking minors left after the last review round and decided they must
+  be fixed before the branch is pushed and a PR is opened.
+
 **One change made after human inspection**
-- None was requested by Pakorn in this session. For the record, the biggest change after review
-  came from the code-reviewer agent, not a human: `safeNext` (the post-login `next` redirect check)
-  first only rejected values starting with `//` or `/\`, so `/login?next=/%09/evil.com` and
-  `/login?next=/.//evil.com` could still send a user off-site. It now rejects control characters and
-  backslashes, resolves the value against a dummy origin, requires the same origin, and rejects a
-  resolved path that starts with `//`. Tests cover each bypass.
+- Because of Pakorn's decision above, the four minors were fixed before push. Example: before, the
+  lead, contact, company, activity, stage and delete forms only showed an error text when the
+  session had expired (HTTP 401). After, they share one helper (`components/crm/auth-redirect.ts`)
+  that sends the user to `/login?next=<current page>`, and the login page sanitizes that `next`
+  value. The other three: the timeline tie re-fetch now has a fixed order and a comment stating its
+  500 row limit, the email-only login limiter now has tests, and the `value` error text now says
+  "must be at most 9,999,999,999.99".
+- Earlier in the session, the biggest change after review came from the code-reviewer agent, not a
+  human: `safeNext` (the post-login `next` redirect check) first only rejected values starting with
+  `//` or `/\`, so `/login?next=/%09/evil.com` and `/login?next=/.//evil.com` could still send a user
+  off-site. It now rejects control characters and backslashes, resolves the value against a dummy
+  origin, requires the same origin, and rejects a resolved path that starts with `//`.
