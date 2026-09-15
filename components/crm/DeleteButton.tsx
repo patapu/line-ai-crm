@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { ApiError, apiFetch } from '@/components/crm/api'
+import { redirectOnUnauthorized } from '@/components/crm/auth-redirect'
 
 export interface DeleteButtonProps {
   url: string
@@ -26,6 +27,7 @@ export function DeleteButton({ url, redirectTo, confirmText }: DeleteButtonProps
       router.push(redirectTo)
       router.refresh()
     } catch (err) {
+      if (redirectOnUnauthorized(router, err)) return
       if (err instanceof ApiError && err.status === 409) {
         setError(err.message)
       } else {

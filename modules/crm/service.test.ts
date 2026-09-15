@@ -163,7 +163,14 @@ describe('changeStage logging (S13 finding 3)', () => {
     expect(stageChangedLines).toHaveLength(1)
     const parsed = JSON.parse(stageChangedLines[0])
     expect(parsed).toMatchObject({ leadId, from: 'NEW', to: 'QUALIFIED', userId: salesOwner.id })
-    expect(JSON.stringify(parsed)).not.toContain('@')
+    // No `not.toContain('@')` check here: `Actor` (kind: 'user') has no
+    // email field at all (see lib/auth/dal.ts, frozen), and the log call in
+    // changeStage only ever passes leadId/from/to/userId, none of which can
+    // structurally contain an '@' from this fixture. Asserting it anyway
+    // would always pass regardless of whether redaction works, which is
+    // exactly the tautology flagged at S15 review; the real "no email
+    // leaks" coverage for a value that legitimately carries one lives in
+    // tests/security.test.ts against lib/log.ts's redaction itself.
   })
 
   it('does not log crm.stage_changed when the stage does not actually change', async () => {
@@ -481,6 +488,7 @@ describe('findTimelinePage (tie-loss at the page boundary)', () => {
       2,
       expect.objectContaining({
         where: { leadId, createdAt: new Date(boundary) },
+        orderBy: [{ id: 'desc' }],
         take: 500,
       }),
     )

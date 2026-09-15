@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { ContactPicker, type ContactPickerOption } from '@/components/crm/ContactPicker'
 import { ApiError, apiFetch } from '@/components/crm/api'
+import { redirectOnUnauthorized } from '@/components/crm/auth-redirect'
 import { SOURCES, SOURCE_LABEL } from '@/components/crm/constants'
 import type { LeadDetail } from '@/modules/crm/types'
 import type { CompanyOption, UserOption } from '@/modules/crm/repository'
@@ -71,6 +72,7 @@ export function LeadForm({ mode, lead, users, companies, canReassign, initialCon
         router.refresh()
       }
     } catch (err) {
+      if (redirectOnUnauthorized(router, err)) return
       if (err instanceof ApiError) {
         setFormError(err.message)
         setFieldErrors(err.fieldErrors ?? {})

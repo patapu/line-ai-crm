@@ -25,11 +25,14 @@ export interface ApiFetchInit {
 }
 
 /**
- * `apiFetch` always throws `ApiError` on any non-ok response, including 401:
- * it never redirects itself, since a shared fetch helper cannot know the
- * caller's current path to build a useful `next`. Callers that can reach an
- * expired session (forms, pickers, timelines) should catch `ApiError` with
- * `status === 401` themselves and `router.replace('/login?next=' + ...)`.
+ * `apiFetch` throws `ApiError` on every non-ok response (any status outside
+ * 200-299, including 401): it never redirects itself, since a shared fetch
+ * helper cannot know the caller's current path to build a useful `next`.
+ * Callers that can reach an expired session (forms, pickers, timelines)
+ * catch the error and pass it to `redirectOnUnauthorized` from
+ * `@/components/crm/auth-redirect`, which redirects to
+ * `/login?next=...` on a 401 and otherwise leaves the error for the
+ * caller's own display logic.
  */
 export async function apiFetch<T>(path: string, init: ApiFetchInit = {}): Promise<T> {
   const method = init.method ?? 'GET'

@@ -114,7 +114,7 @@ export async function createLead(input: z.infer<typeof LeadCreate>, actor: Actor
   // 10000000000.00 once stored in a Decimal(12,2) column, which overflows.
   if (input.value !== undefined && input.value !== null && Math.round(input.value * 100) >= 1e12) {
     throw new DomainError('VALIDATION_FAILED', 'value too large', {
-      value: ['must be less than 10,000,000,000'],
+      value: ['must be at most 9,999,999,999.99'],
     })
   }
   const ownerId = input.ownerId ?? (actor.kind === 'user' ? actor.id : undefined)
@@ -256,7 +256,7 @@ export async function updateLead(id: string, input: z.infer<typeof LeadUpdate>, 
   // CR-1 in docs/contract-change-requests.md.
   if (input.value !== undefined && input.value !== null && Math.round(input.value * 100) >= 1e12) {
     throw new DomainError('VALIDATION_FAILED', 'value too large', {
-      value: ['must be less than 10,000,000,000'],
+      value: ['must be at most 9,999,999,999.99'],
     })
   }
   return client.$transaction(async (tx) => {

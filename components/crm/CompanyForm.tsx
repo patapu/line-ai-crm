@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { Field } from '@/components/ui/Field'
 import { Input } from '@/components/ui/Input'
 import { ApiError, apiFetch } from '@/components/crm/api'
+import { redirectOnUnauthorized } from '@/components/crm/auth-redirect'
 import type { CompanyDetail } from '@/modules/crm/repository'
 
 export interface CompanyFormProps {
@@ -44,6 +45,7 @@ export function CompanyForm({ mode, company }: CompanyFormProps) {
         router.refresh()
       }
     } catch (err) {
+      if (redirectOnUnauthorized(router, err)) return
       if (err instanceof ApiError) {
         setFormError(err.message)
         setFieldErrors(err.fieldErrors ?? {})

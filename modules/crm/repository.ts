@@ -335,18 +335,24 @@ export async function findTimelinePage(
   const lastAt = new Date(page.nextCursor)
   const extraQueries: Promise<TimelineItem[]>[] = []
 
-  // Cap: this re-fetch pulls every row a source has at exactly `lastAt`,
-  // which is normally a handful of ties but is otherwise unbounded (a
-  // pathological burst of same-millisecond rows could otherwise pull an
-  // arbitrarily large result set). 500 is far beyond any realistic tie
-  // count for this app's traffic, so it is effectively just a safety cap.
+  // Accepted limit: if more than TIE_REFETCH_CAP rows of one source share
+  // the boundary timestamp for one lead, the rows past the cap are not
+  // returned (the next page uses strict `before <`, so it will not
+  // re-surface what was already sent). This is accepted because no writer
+  // in this app produces that many rows for one lead in a single
+  // millisecond.
   const TIE_REFETCH_CAP = 500
 
   const lastAct = acts[acts.length - 1]
   if (acts.length === take && lastAct.createdAt.getTime() === lastAt.getTime()) {
     extraQueries.push(
       client.activity
-        .findMany({ where: { leadId, createdAt: lastAt }, take: TIE_REFETCH_CAP, select: activityTimelineSelect })
+        .findMany({
+          where: { leadId, createdAt: lastAt },
+          orderBy: [{ id: 'desc' }],
+          take: TIE_REFETCH_CAP,
+          select: activityTimelineSelect,
+        })
         .then((rows) => rows.map(activityToItem)),
     )
   }
@@ -355,7 +361,12 @@ export async function findTimelinePage(
   if (msgs.length === take && lastMsg.createdAt.getTime() === lastAt.getTime()) {
     extraQueries.push(
       client.message
-        .findMany({ where: { leadId, createdAt: lastAt }, take: TIE_REFETCH_CAP, select: messageTimelineSelect })
+        .findMany({
+          where: { leadId, createdAt: lastAt },
+          orderBy: [{ id: 'desc' }],
+          take: TIE_REFETCH_CAP,
+          select: messageTimelineSelect,
+        })
         .then((rows) => rows.map(messageToItem)),
     )
   }

@@ -54,9 +54,13 @@ export function safeNext(value: string | undefined): string {
   // to a protocol-relative pathname ('//evil.com') even though the origin
   // check above passed (the origin stays SAFE_BASE; only the pathname
   // becomes scheme-relative). Returning such a pathname as-is would
-  // hard-navigate off-site, so reject it here. '/\\' is covered
-  // defensively: some browsers normalize a leading backslash to '/'.
-  if (url.pathname.startsWith('//') || url.pathname.startsWith('/\\')) return '/'
+  // hard-navigate off-site, so reject it here. A leading-backslash variant
+  // of this ('/\\evil.com') is not a separate case to check: any raw
+  // backslash in `value` is already rejected by `hasUnsafeChar` above,
+  // before parsing, and a percent-encoded one ('%5c') is left encoded in
+  // `url.pathname` rather than decoded into a literal backslash, so
+  // `url.pathname` can never start with a real backslash character here.
+  if (url.pathname.startsWith('//')) return '/'
 
   // Compare the decoded, lowercased pathname (not the raw one) so encoded
   // or dotted variants of '/login' ('/%6Cogin', '/./login') are excluded

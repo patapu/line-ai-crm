@@ -8,7 +8,8 @@ import { useRouter } from 'next/navigation'
 import { useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { Input } from '@/components/ui/Input'
-import { ApiError, apiFetch } from '@/components/crm/api'
+import { apiFetch } from '@/components/crm/api'
+import { redirectOnUnauthorized } from '@/components/crm/auth-redirect'
 import type { Paged } from '@/lib/contracts/common'
 import type { ContactListItem } from '@/modules/crm/repository'
 
@@ -61,11 +62,7 @@ export function ContactPicker({ id, name, initial, onSelect }: ContactPickerProp
           setOptions(res.items.map((item) => ({ id: item.id, label: labelFor(item) })))
         } catch (err) {
           if (latestQuery.current !== value) return
-          if (err instanceof ApiError && err.status === 401) {
-            const current = `${window.location.pathname}${window.location.search}`
-            router.replace(`/login?next=${encodeURIComponent(current)}`)
-            return
-          }
+          if (redirectOnUnauthorized(router, err)) return
           setOptions([])
         }
       })()

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { Select } from '@/components/ui/Select'
 import { Textarea } from '@/components/ui/Textarea'
 import { ApiError, apiFetch } from '@/components/crm/api'
+import { redirectOnUnauthorized } from '@/components/crm/auth-redirect'
 import { STAGES, STAGE_LABEL } from '@/components/crm/constants'
 import type { LeadStage } from '@/lib/generated/prisma/client'
 
@@ -46,6 +47,7 @@ export function StageChanger({ leadId, stage, canChange }: StageChangerProps) {
         router.refresh()
       }
     } catch (err) {
+      if (redirectOnUnauthorized(router, err)) return
       if (err instanceof ApiError && err.status === 409) {
         setMessage('Stage was changed by someone else, reload')
       } else if (err instanceof ApiError && err.status === 403) {

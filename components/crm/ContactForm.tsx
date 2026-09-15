@@ -9,6 +9,7 @@ import { Field } from '@/components/ui/Field'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { ApiError, apiFetch } from '@/components/crm/api'
+import { redirectOnUnauthorized } from '@/components/crm/auth-redirect'
 import type { CompanyOption, ContactDetail, UserOption } from '@/modules/crm/repository'
 
 export interface ContactFormProps {
@@ -49,6 +50,7 @@ export function ContactForm({ mode, contact, companies, users }: ContactFormProp
         router.refresh()
       }
     } catch (err) {
+      if (redirectOnUnauthorized(router, err)) return
       if (err instanceof ApiError) {
         setFormError(err.message)
         setFieldErrors(err.fieldErrors ?? {})

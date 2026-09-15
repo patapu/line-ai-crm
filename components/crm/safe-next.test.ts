@@ -87,6 +87,30 @@ describe('safeNext', () => {
     expect(safeNext('/login/extra')).toBe('/')
   })
 
+  // S15 round 2 (S2 gap fill): invalid percent-encoding fails
+  // decodeURIComponent, which the /login-exclusion step must treat as
+  // unsafe rather than let through.
+  it('falls back to / for a target with invalid percent-encoding', () => {
+    expect(safeNext('/%zz')).toBe('/')
+  })
+
+  // A double-dot segment spelled with percent-encoded dots (%2E is the
+  // WHATWG URL spec's own case-insensitive alias for a literal '.' when
+  // detecting dot segments) still resolves protocol-relative, same as the
+  // literal '/../ /evil.com' case above.
+  it('falls back to / for a percent-encoded double-dot segment that resolves protocol-relative', () => {
+    expect(safeNext('/%2E%2E//evil.com')).toBe('/')
+  })
+
+  // '%2f' (encoded '/') is never decoded by the URL parser into a literal
+  // slash inside pathname, so this does not collapse into '//evil.com' the
+  // way the raw-dot-segment cases above do; the final return also uses the
+  // raw (still-encoded) `url.pathname`, so the value comes back unchanged
+  // rather than being rejected or decoded.
+  it('returns a percent-encoded slash target unchanged (does not decode into a protocol-relative path)', () => {
+    expect(safeNext('/%2f/evil.com')).toBe('/%2f/evil.com')
+  })
+
   it('falls back to / for an empty string', () => {
     expect(safeNext('')).toBe('/')
   })

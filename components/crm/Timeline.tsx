@@ -8,7 +8,8 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { Badge } from '@/components/ui/Badge'
 import { formatDateTime } from '@/components/ui/format'
-import { ApiError, apiFetch } from '@/components/crm/api'
+import { apiFetch } from '@/components/crm/api'
+import { redirectOnUnauthorized } from '@/components/crm/auth-redirect'
 import { STAGE_LABEL, STAGES } from '@/components/crm/constants'
 import type { TimelineItem, TimelinePage } from '@/lib/contracts/timeline'
 
@@ -63,11 +64,7 @@ export function Timeline({ leadId, initial }: TimelineProps) {
       setItems((prev) => [...prev, ...page.items])
       setNextCursor(page.nextCursor)
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        const current = `${window.location.pathname}${window.location.search}`
-        router.replace(`/login?next=${encodeURIComponent(current)}`)
-        return
-      }
+      if (redirectOnUnauthorized(router, err)) return
       setError('โหลดข้อมูลเพิ่มไม่สำเร็จ ลองใหม่อีกครั้ง')
     } finally {
       setLoading(false)

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 import { getDb } from '@/lib/db'
 import { verifyPassword, verifyPasswordDummy } from '@/lib/auth/password'
@@ -47,6 +47,18 @@ describe('POST /api/auth/login', () => {
     mockedGetDb.mockReset()
     logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  // Without this, each test's `vi.spyOn(console, ...)` above wraps whatever
+  // the previous test left behind instead of the real console method, and
+  // the mocks module-mocked at the top of this file (getDb, verifyPassword,
+  // verifyPasswordDummy) would carry stale `.mockResolvedValueOnce` queues
+  // into the next test. `failuresByIpEmail`/`failuresByEmail` themselves are
+  // plain module-level Maps with no test hook to reset, so every test in
+  // this file (old and new) is written to use its own email address that no
+  // other test touches, rather than relying on module isolation.
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
   function loggedLines(): string[] {
@@ -101,5 +113,102 @@ describe('POST /api/auth/login', () => {
     for (const line of loggedLines()) {
       expect(line).not.toContain('@')
     }
+  })
+
+  // MAX_EMAIL_FAILURES in app/api/auth/login/route.ts is 30 at the time of
+  // writing (read from source, not assumed): each failure below comes from
+  // a distinct x-forwarded-for, so the per-`ip|email` cap (MAX_FAILURES=10)
+  // never fires and only the email-only limiter can explain the 429.
+  const MAX_EMAIL_FAILURES = 30
+
+  it('locks out one email after MAX_EMAIL_FAILURES failures from distinct IPs, even though no single IP repeats', async () => {
+    const email = 'emaillimiter1@test.local'
+    mockedGetDb.mockReturnValue(makeFakeDb(vi.fn().mockResolvedValue(null)))
+
+    for (let i = 0; i < MAX_EMAIL_FAILURES; i++) {
+      const res = await POST(loginRequest(email, 'wrong-password', `198.51.100.${i}`), {})
+      expect(res.status).toBe(401)
+    }
+
+    // A brand new IP, never used above: only the email-only counter can
+    // explain a 429 here, since this ip|email pair has never failed before.
+    const res = await POST(loginRequest(email, 'wrong-password', '198.51.100.255'), {})
+    expect(res.status).toBe(429)
+  })
+
+  it('a success resets the email-only counter too (further failures start from zero again)', async () => {
+    const email = 'emaillimiter2@test.local'
+    const user = { id: 'cuser0000003', name: 'Sales Three', role: 'SALES', passwordHash: 'irrelevant', active: true }
+    mockedGetDb.mockReturnValue(makeFakeDb(vi.fn().mockResolvedValue(user)))
+
+    // One short of the email-only cap, each from a distinct IP.
+    for (let i = 0; i < MAX_EMAIL_FAILURES - 1; i++) {
+      mockedVerifyPassword.mockResolvedValueOnce(false)
+      const res = await POST(loginRequest(email, 'wrong-password', `203.0.114.${i}`), {})
+      expect(res.status).toBe(401)
+    }
+
+    mockedVerifyPassword.mockResolvedValueOnce(true)
+    const okRes = await POST(loginRequest(email, 'correct-password', '203.0.114.200'), {})
+    expect(okRes.status).toBe(200)
+
+    // If the success had NOT cleared failuresByEmail, the counter would
+    // already sit at MAX_EMAIL_FAILURES - 1 and the 2nd of these (the
+    // MAX_EMAIL_FAILURES-th failure overall) would already be 429. All 5
+    // must be 401.
+    for (let i = 0; i < 5; i++) {
+      mockedVerifyPassword.mockResolvedValueOnce(false)
+      const res = await POST(loginRequest(email, 'wrong-password', `203.0.115.${i}`), {})
+      expect(res.status).toBe(401)
+    }
+  })
+})
+
+describe('POST /api/auth/login - auth.login_failed log fields', () => {
+  let logSpy: ReturnType<typeof vi.spyOn>
+  let errorSpy: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    mockedVerifyPassword.mockReset().mockResolvedValue(false)
+    mockedVerifyPasswordDummy.mockReset().mockResolvedValue(false)
+    mockedGetDb.mockReset()
+    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  function loggedEvents(event: string): Record<string, unknown>[] {
+    return [...logSpy.mock.calls, ...errorSpy.mock.calls]
+      .map((call) => JSON.parse(call[0] as string) as Record<string, unknown>)
+      .filter((line) => line.event === event)
+  }
+
+  it('logs auth.login_failed with no userId for an unknown email', async () => {
+    const email = 'logcheck-unknown@test.local'
+    mockedGetDb.mockReturnValue(makeFakeDb(vi.fn().mockResolvedValue(null)))
+
+    const res = await POST(loginRequest(email, 'wrong-password', '192.0.2.10'), {})
+    expect(res.status).toBe(401)
+
+    const events = loggedEvents('auth.login_failed')
+    expect(events).toHaveLength(1)
+    expect(events[0]).not.toHaveProperty('userId')
+  })
+
+  it('logs auth.login_failed with the userId for a known email whose password is wrong', async () => {
+    const email = 'logcheck-known@test.local'
+    const user = { id: 'cuser0000004', name: 'Sales Four', role: 'SALES', passwordHash: 'irrelevant', active: true }
+    mockedGetDb.mockReturnValue(makeFakeDb(vi.fn().mockResolvedValue(user)))
+    mockedVerifyPassword.mockResolvedValueOnce(false)
+
+    const res = await POST(loginRequest(email, 'wrong-password', '192.0.2.11'), {})
+    expect(res.status).toBe(401)
+
+    const events = loggedEvents('auth.login_failed')
+    expect(events).toHaveLength(1)
+    expect(events[0]).toMatchObject({ userId: user.id })
   })
 })

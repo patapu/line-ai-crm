@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { Select } from '@/components/ui/Select'
 import { Textarea } from '@/components/ui/Textarea'
 import { ApiError, apiFetch } from '@/components/crm/api'
+import { redirectOnUnauthorized } from '@/components/crm/auth-redirect'
 import { ACTIVITY_TYPES, ACTIVITY_TYPE_LABEL } from '@/components/crm/constants'
 
 export interface ActivityFormProps {
@@ -30,6 +31,7 @@ export function ActivityForm({ leadId }: ActivityFormProps) {
       setBody('')
       router.refresh()
     } catch (err) {
+      if (redirectOnUnauthorized(router, err)) return
       setError(err instanceof ApiError ? err.message : 'บันทึกไม่สำเร็จ')
     } finally {
       setSubmitting(false)
