@@ -1,0 +1,4 @@
+# Keep LF in the repo and in every checkout, including git worktrees on
+# Windows machines with core.autocrlf=true. Prisma checksums migration files
+# byte for byte, so a CRLF checkout would look like an edited migration.
+* text=auto eol=lf

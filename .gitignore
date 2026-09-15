@@ -9,5 +9,6 @@ lib/generated/
 .env.*
 !.env.example
 .vercel
+.claude/
 npm-debug.log*
 .DS_Store

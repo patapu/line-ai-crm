@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 import path from 'path'
 
 // [F] node environment, no React plugin: layer 0 tests exercise pure
@@ -24,5 +24,7 @@ export default defineConfig({
     // parallel would let them race on the same rows. Force one file at a
     // time; within a file, tests still run in the normal Vitest order.
     fileParallelism: false,
+    // Session worktrees live under .claude/worktrees; never collect their tests.
+    exclude: [...configDefaults.exclude, '.claude/**'],
   },
 })
