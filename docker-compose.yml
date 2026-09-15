@@ -1,0 +1,25 @@
+# [F, layer 0: lane D owns this file and extends it with `migrate` and `app`
+# services later]. See docs/design.md section 8 "Portability notes".
+# Credentials match .env.example's local DATABASE_URL / DIRECT_URL defaults.
+# No top-level `version:` key (deprecated by Compose).
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: crm
+      POSTGRES_PASSWORD: crm
+      POSTGRES_DB: crm
+    ports:
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - line_ai_crm_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U crm -d crm']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  line_ai_crm_db_data:

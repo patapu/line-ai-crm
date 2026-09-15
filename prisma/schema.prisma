@@ -1,0 +1,296 @@
+// Prisma major: 7.x (see docs/design.md section 10 for the verified Prisma 7 setup)
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  SALES
+}
+
+enum LeadStage {
+  NEW
+  QUALIFIED
+  PROPOSAL
+  WON
+  LOST
+}
+
+enum LeadSource {
+  WEBSITE
+  MANUAL
+  LINE
+}
+
+/// Grows into a mini ChatHub: EMAIL, FACEBOOK, WEBCHAT later. MVP = LINE + MANUAL.
+enum Channel {
+  LINE
+  MANUAL
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+/// RECEIVED = inbound from LINE. LOGGED = manual entry of an offline conversation.
+enum MessageStatus {
+  RECEIVED
+  QUEUED
+  SENT
+  FAILED
+  LOGGED
+}
+
+enum ActivityType {
+  LEAD_CREATED
+  STAGE_CHANGED
+  OWNER_CHANGED
+  NOTE
+  CALL
+  MEETING
+  EMAIL
+  SCORE_APPLIED
+  AI_SUGGESTION_CREATED
+  AI_SUGGESTION_APPROVED
+  AI_SUGGESTION_REJECTED
+  MESSAGE_SENT
+  MESSAGE_FAILED
+  CONTACT_CREATED_FROM_LINE
+}
+
+enum SuggestionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUPERSEDED
+}
+
+enum SuggestionSource {
+  MODEL
+  FALLBACK
+}
+
+enum WebhookEventStatus {
+  RECEIVED
+  PROCESSED
+  IGNORED
+  FAILED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  role         Role     @default(SALES)
+  passwordHash String
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  ownedLeads           Lead[]         @relation("LeadOwner")
+  createdLeads         Lead[]         @relation("LeadCreatedBy")
+  ownedContacts        Contact[]      @relation("ContactOwner")
+  createdContacts      Contact[]      @relation("ContactCreatedBy")
+  createdCompanies     Company[]      @relation("CompanyCreatedBy")
+  activities           Activity[]     @relation("ActivityActor")
+  sentMessages         Message[]      @relation("MessageSentBy")
+  requestedSuggestions AiSuggestion[] @relation("SuggestionRequestedBy")
+  decidedSuggestions   AiSuggestion[] @relation("SuggestionDecidedBy")
+}
+
+model Company {
+  id          String   @id @default(cuid())
+  name        String
+  domain      String?  @unique
+  industry    String?
+  sizeBand    String?
+  createdById String?
+  createdBy   User?    @relation("CompanyCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  contacts Contact[]
+  leads    Lead[]
+
+  @@index([name])
+}
+
+model Contact {
+  id              String     @id @default(cuid())
+  firstName       String
+  lastName        String?
+  email           String?
+  phone           String?
+  lineUserId      String?    @unique
+  lineDisplayName String?
+  source          LeadSource @default(MANUAL)
+  companyId       String?
+  company         Company?   @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  ownerId         String?
+  owner           User?      @relation("ContactOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  createdById     String?
+  createdBy       User?      @relation("ContactCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  leads    Lead[]
+  messages Message[]
+  tags     Tag[]
+
+  @@index([companyId])
+  @@index([email])
+  @@index([firstName])
+  @@index([updatedAt])
+}
+
+model Lead {
+  id             String     @id @default(cuid())
+  title          String
+  stage          LeadStage  @default(NEW)
+  source         LeadSource @default(MANUAL)
+  value          Decimal?   @db.Decimal(12, 2)
+  currency       String     @default("THB")
+  /// Confirmed score only. Written when a human applies an AI score. CHECK 0..100.
+  score          Int?
+  scoreUpdatedAt DateTime?
+  lostReason     String?
+  stageChangedAt DateTime   @default(now())
+  closedAt       DateTime?
+  contactId      String
+  contact        Contact    @relation(fields: [contactId], references: [id], onDelete: Restrict)
+  companyId      String?
+  company        Company?   @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  ownerId        String
+  owner          User       @relation("LeadOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  createdById    String?
+  createdBy      User?      @relation("LeadCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  activities  Activity[]
+  messages    Message[]
+  suggestions AiSuggestion[]
+
+  @@index([stage, updatedAt(sort: Desc)])
+  @@index([ownerId, stage])
+  @@index([contactId])
+  @@index([companyId])
+  @@index([source])
+}
+
+/// Append only audit trail. No updatedAt on purpose.
+model Activity {
+  id        String       @id @default(cuid())
+  leadId    String
+  lead      Lead         @relation(fields: [leadId], references: [id], onDelete: Restrict)
+  type      ActivityType
+  body      String?
+  /// STAGE_CHANGED: {from,to,reason} | AI_*: {suggestionId,source} | MESSAGE_*: {messageId,retryKey,attempts}
+  meta      Json?
+  /// null = system actor (LINE webhook, seed)
+  actorId   String?
+  actor     User?        @relation("ActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
+  createdAt DateTime     @default(now())
+
+  @@index([leadId, createdAt(sort: Desc)])
+}
+
+model Message {
+  id             String           @id @default(cuid())
+  channel        Channel
+  direction      MessageDirection
+  status         MessageStatus
+  body           String
+  /// Raw LINE message object (inbound) or push request body (outbound)
+  payload        Json?
+  contactId      String
+  contact        Contact          @relation(fields: [contactId], references: [id], onDelete: Restrict)
+  leadId         String?
+  lead           Lead?            @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  /// Inbound LINE message.id, second dedupe guard
+  lineMessageId  String?          @unique
+  /// X-Line-Retry-Key, generated ONCE per outbound send, reused on every retry
+  retryKey       String?          @unique @db.Uuid
+  attemptCount   Int              @default(0)
+  lastError      String?
+  lineRequestId  String?
+  sentAt         DateTime?
+  sentById       String?
+  sentBy         User?            @relation("MessageSentBy", fields: [sentById], references: [id], onDelete: SetNull)
+  /// Unique: one outbound message per suggestion, blocks double send on double click
+  aiSuggestionId String?          @unique
+  aiSuggestion   AiSuggestion?    @relation(fields: [aiSuggestionId], references: [id], onDelete: SetNull)
+  webhookEventId String?
+  webhookEvent   WebhookEvent?    @relation(fields: [webhookEventId], references: [id], onDelete: SetNull)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([leadId, createdAt(sort: Desc)])
+  @@index([contactId, createdAt(sort: Desc)])
+  @@index([status, updatedAt])
+}
+
+model AiSuggestion {
+  id             String           @id @default(cuid())
+  leadId         String
+  lead           Lead             @relation(fields: [leadId], references: [id], onDelete: Restrict)
+  status         SuggestionStatus @default(PENDING)
+  source         SuggestionSource
+  lowConfidence  Boolean          @default(false)
+  confidence     Float?
+  summary        String
+  score          Int
+  scoreReasons   Json
+  nextBestAction Json
+  draftReply     String?
+  flags          String[]
+  model          String?
+  promptVersion  String
+  latencyMs      Int?
+  /// TIMEOUT | PROVIDER_ERROR | SCHEMA_INVALID | NO_API_KEY | GUARDRAIL_BLOCKED
+  errorCode      String?
+  requestedById  String
+  requestedBy    User             @relation("SuggestionRequestedBy", fields: [requestedById], references: [id], onDelete: Restrict)
+  decidedById    String?
+  decidedBy      User?            @relation("SuggestionDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt      DateTime?
+  createdAt      DateTime         @default(now())
+
+  message Message?
+
+  @@index([leadId, createdAt(sort: Desc)])
+}
+
+model WebhookEvent {
+  id             String             @id @default(cuid())
+  webhookEventId String             @unique
+  type           String
+  lineUserId     String?
+  isRedelivery   Boolean            @default(false)
+  eventTimestamp DateTime
+  payload        Json
+  status         WebhookEventStatus @default(RECEIVED)
+  error          String?
+  receivedAt     DateTime           @default(now())
+  processedAt    DateTime?
+
+  messages Message[]
+
+  @@index([status, receivedAt])
+  @@index([lineUserId])
+}
+
+/// Optional. Audience segmentation is out of scope.
+model Tag {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  color     String?
+  createdAt DateTime  @default(now())
+  contacts  Contact[]
+}
