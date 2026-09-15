@@ -8,7 +8,7 @@
 // contract instead of importing modules/line/dto.ts, which only keeps server
 // mapping code (Prisma Message -> MessageItem) out of the client bundle.
 
-import { useState } from 'react'
+import { useMemo, useState, useSyncExternalStore } from 'react'
 import { useRouter } from 'next/navigation'
 import type { TimelineItem } from '@/lib/contracts/timeline'
 import { readErrorMessage } from '@/components/messages/errors'
@@ -28,18 +28,62 @@ const CHANNEL_BG: Record<MessageItem['channel'], string> = {
 /** Mirrors modules/line/service.ts's RETRY_KEY_MAX_AGE_MS (23h, design section 10). */
 const RETRY_KEY_MAX_AGE_MS = 23 * 60 * 60 * 1000
 
+/** setTimeout stores its delay as a 32-bit signed int; anything above this overflows and fires immediately. */
+const MAX_SET_TIMEOUT_DELAY_MS = 2 ** 31 - 1
+
+interface RetryExpiryStore {
+  subscribe: (onStoreChange: () => void) => () => void
+  getSnapshot: () => boolean
+}
+
 /**
- * Kept as its own function (instead of inline in render) so a purity lint on
- * Date.now() checks this call site, not the component body.
+ * An external store for "has the 23h retry window closed for this message".
+ * getSnapshot only ever returns a cached boolean, so it stays pure to call
+ * during render. subscribe runs afterwards, in an effect, where reading the
+ * clock is fine: it schedules at most one timer for the moment the window
+ * closes (or, if it already has, flips the flag and notifies right away
+ * instead of arming a timer).
  */
-function isPastRetryWindow(at: string): boolean {
-  return Date.now() - Date.parse(at) > RETRY_KEY_MAX_AGE_MS
+function createRetryExpiryStore(at: string): RetryExpiryStore {
+  const deadline = Date.parse(at) + RETRY_KEY_MAX_AGE_MS
+  let expired = false
+
+  return {
+    subscribe(onStoreChange) {
+      const delay = deadline - Date.now()
+      if (delay <= 0) {
+        expired = true
+        onStoreChange()
+        return () => {}
+      }
+      const timer = setTimeout(() => {
+        expired = true
+        onStoreChange()
+      }, Math.min(delay, MAX_SET_TIMEOUT_DELAY_MS))
+      return () => clearTimeout(timer)
+    },
+    getSnapshot() {
+      return expired
+    },
+  }
+}
+
+/** The server (and the first client render, before hydration) always sees "not expired yet". */
+function getServerRetryExpirySnapshot(): boolean {
+  return false
 }
 
 export function MessageBubble({ message, canRetry }: MessageBubbleProps) {
   const router = useRouter()
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const retryExpiryStore = useMemo(() => createRetryExpiryStore(message.at), [message.at])
+  const isPastRetryWindow = useSyncExternalStore(
+    retryExpiryStore.subscribe,
+    retryExpiryStore.getSnapshot,
+    getServerRetryExpirySnapshot
+  )
 
   const isOutbound = message.direction === 'OUTBOUND'
   const bg = message.direction === 'INBOUND' ? 'bg-gray-100' : CHANNEL_BG[message.channel]
@@ -49,7 +93,7 @@ export function MessageBubble({ message, canRetry }: MessageBubbleProps) {
     message.channel === 'LINE' &&
     message.direction === 'OUTBOUND' &&
     (message.status === 'FAILED' || message.status === 'QUEUED') &&
-    !isPastRetryWindow(message.at)
+    !isPastRetryWindow
 
   async function handleRetry() {
     setPending(true)

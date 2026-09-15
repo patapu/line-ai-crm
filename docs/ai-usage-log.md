@@ -41,12 +41,19 @@ Newest entries go at the top.
   no drop).
 - Pakorn has not reviewed the Lane C code itself yet. The code review in this session came from the code-reviewer
   agent (first pass: 0 critical, 1 major, 8 minor, 9 nit), and the fixes were checked by tests, not by a human.
+- After the agent re-review came back with 0 blocking findings and 3 minor ones, Pakorn read that summary and
+  decided the 3 minors had to be fixed before the branch was pushed ("แก้ minor 3 ข้อก่อน แล้วค่อย push").
 
 **One change made after human inspection**
 - Before: the Lane C database tests would have targeted `crm_test`, which did not exist, so they could only fail or
   be pointed at the shared dev database. After: `crm_test` exists with both migrations, and every Lane C database
   test runs there, creating and deleting only its own synthetic rows by id. Reason: Pakorn picked this option over
   reusing the dev database `crm`.
+- Also from Pakorn's push condition: before, `MessageBubble` called `Date.now()` during render to hide Retry after
+  23 hours (a hydration mismatch risk), and two tests (the 23 hour retry refusal and the streamed 1 MB webhook cap)
+  would still pass with the guard they claimed to cover removed. After: the expiry check runs only after mount
+  through `useSyncExternalStore`, and both tests were rewritten so they would fail if their guard were removed
+  (confirmed by the code-reviewer agent reasoning through the assertions, not by running the mutated code).
 
 ### 2026-09-15, Lane A
 

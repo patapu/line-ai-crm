@@ -194,11 +194,22 @@ describe('POST /api/line/webhook route: signature and size', () => {
     expect(res.status).toBe(413)
   })
 
-  it('returns 413 for a chunked body over the limit with no content-length header at all', async () => {
+  it('returns 413 for a chunked body over the limit with no content-length header at all, and stops reading instead of draining the whole stream', async () => {
     const { POST } = await import('@/app/api/line/webhook/route')
-    const chunkSize = 300 * 1024
-    const totalChunks = 5 // 1.5 MB streamed, over the 1 MB cap, in chunks with no declared length
+    // 64 KiB chunks, offered well past the 1 MiB cap (100 * 64 KiB = 6.25 MB
+    // on offer), so that if the route ever switched to something that reads
+    // ahead or drains the whole body (e.g. `Buffer.from(await
+    // req.arrayBuffer())`) before checking size, this test would still have
+    // plenty of unread chunks left to prove that with: it would end up
+    // pulling every chunk and never calling cancel(), instead of stopping
+    // partway through. Reasoned, not run: swapping in arrayBuffer() would
+    // make pull() run to completion (sentChunks === totalChunks) and would
+    // never invoke the stream's cancel() callback, since arrayBuffer()
+    // reads to the stream's natural end rather than aborting early.
+    const chunkSize = 64 * 1024
+    const totalChunks = 100
     let sentChunks = 0
+    let cancelled = false
     const stream = new ReadableStream<Uint8Array>({
       pull(controller) {
         if (sentChunks >= totalChunks) {
@@ -207,6 +218,9 @@ describe('POST /api/line/webhook route: signature and size', () => {
         }
         sentChunks++
         controller.enqueue(new Uint8Array(chunkSize).fill(97))
+      },
+      cancel() {
+        cancelled = true
       },
     })
     const req = new NextRequest(
@@ -222,6 +236,14 @@ describe('POST /api/line/webhook route: signature and size', () => {
 
     const res = await POST(req, {})
     expect(res.status).toBe(413)
+
+    // The cap (1 MiB / 64 KiB = 16 chunks) should trip around chunk 17, well
+    // short of the 100 on offer: proves the reader was cancelled mid-stream
+    // instead of the route draining everything first and checking size last.
+    expect(cancelled).toBe(true)
+    expect(sentChunks).toBeLessThan(totalChunks)
+    expect(sentChunks).toBeLessThan(20)
+
     expect(findOrCreateContactByLineUserId).not.toHaveBeenCalled()
     expect(findOrOpenLeadForContact).not.toHaveBeenCalled()
   })

@@ -307,6 +307,19 @@ describe('case 10: a 23h+ old message cannot be delivered or retried', () => {
     // Backdated createdAt by more than 23h *and* status FAILED (not QUEUED),
     // so this can only pass via the top-level 23h-expiry guard in
     // retryMessage: a FAILED row never reaches the QUEUED 60s-guard branch.
+    //
+    // retryMessage's own guard (service.ts ~530-535) throws "This message is
+    // older than 23 hours, so its LINE retry key may have expired. Send it
+    // as a new message instead." *before* touching the row at all. If that
+    // guard were removed, the FAILED row would get claimed (status flipped
+    // to QUEUED) and handed to deliverQueuedMessage, whose own 23h guard
+    // (service.ts ~360) throws a *different* message ("retry key expired
+    // (older than 23 hours): send a new message") only after the revert
+    // path has already reset status back to FAILED, lastError, updatedAt,
+    // and attemptCount. So asserting the exact retryMessage wording, plus
+    // that the row was never touched, is what actually pins down which
+    // guard fired: a generic 'older than 23 hours' substring matches both
+    // messages and would not have caught the guard moving.
     const line = freshLine()
     const { lead } = await createLeadWithContact()
     line.failNext(3)
@@ -314,14 +327,23 @@ describe('case 10: a 23h+ old message cannot be delivered or retried', () => {
     expect(failed.status).toBe('FAILED')
     await db.$executeRaw`UPDATE "Message" SET "createdAt" = NOW() - INTERVAL '23 hours 5 minutes' WHERE id = ${failed.id}`
 
+    const before = await db.message.findUniqueOrThrow({ where: { id: failed.id } })
+    expect(before.status).toBe('FAILED')
+
     const pushSpy = vi.spyOn(line, 'push')
 
     await expect(retryMessage({ messageId: failed.id, actor }, { line, db })).rejects.toMatchObject({
       code: 'CONFLICT',
-      message: expect.stringContaining('older than 23 hours'),
+      message: expect.stringContaining('may have expired'),
     })
 
     expect(pushSpy).not.toHaveBeenCalled()
+
+    const after = await db.message.findUniqueOrThrow({ where: { id: failed.id } })
+    expect(after.status).toBe('FAILED')
+    expect(after.lastError).toBe(before.lastError)
+    expect(after.updatedAt).toEqual(before.updatedAt)
+    expect(after.attemptCount).toBe(before.attemptCount)
   })
 
   it('retryMessage succeeds on a FAILED message backdated 22h55m, keeping the same retryKey', async () => {
