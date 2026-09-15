@@ -25,6 +25,29 @@ Newest entries go at the top.
 
 ## Log
 
+### 2026-09-15, Lane C
+
+**Sample tasks / prompts**
+- Opening prompt from docs/tasks/lane-C.md: build signature.ts and client.mock.ts first (Lanes B and D depend on
+  them), then the webhook route, then send and retry, following design sections 5A, 5B steps 6 to 10, and 10.
+- Work was split across agents: orchestrator planned; provisioner set up the worktree and the test database;
+  code-explorer, code-planner, code-implementer, code-tester and code-reviewer did the lane work in three phases
+  (clients, webhook, send/retry plus UI).
+
+**What the human reviewed or rejected**
+- Pakorn decided where the database tests run. vitest.setup.ts points at `crm_test`, which did not exist in the
+  shared container. The options were: create `crm_test`, reuse the dev database `crm`, or skip DB tests when no
+  database is reachable. He chose to create `crm_test` (a new database plus `prisma migrate deploy` only, no reset,
+  no drop).
+- Pakorn has not reviewed the Lane C code itself yet. The code review in this session came from the code-reviewer
+  agent (first pass: 0 critical, 1 major, 8 minor, 9 nit), and the fixes were checked by tests, not by a human.
+
+**One change made after human inspection**
+- Before: the Lane C database tests would have targeted `crm_test`, which did not exist, so they could only fail or
+  be pointed at the shared dev database. After: `crm_test` exists with both migrations, and every Lane C database
+  test runs there, creating and deleting only its own synthetic rows by id. Reason: Pakorn picked this option over
+  reusing the dev database `crm`.
+
 ### 2026-09-15, Lane A
 
 **Sample tasks / prompts**

@@ -35,6 +35,46 @@ describe('getLineClient in mock mode (the vitest.setup.ts default)', () => {
   })
 })
 
+describe('getLineClient in mock mode with NODE_ENV=production and no configured secret', () => {
+  it('uses a random per-process secret: the well-known mock secret no longer verifies, but the client sign()/verifySignature() still round-trip', async () => {
+    const originalSecret = process.env.LINE_CHANNEL_SECRET
+    const originalMode = process.env.LINE_MODE
+
+    vi.resetModules()
+    vi.stubEnv('NODE_ENV', 'production')
+    delete process.env.LINE_CHANNEL_SECRET
+    process.env.LINE_MODE = 'mock'
+
+    try {
+      const { computeLineSignature } = await import('@/modules/line/signature')
+      const clientModule = await import('@/modules/line/client')
+      const client = clientModule.getLineClient() as MockLineClient
+      expect(client.mode).toBe('mock')
+
+      const body = Buffer.from('production mock secret check', 'utf8')
+
+      // The well-known constant (used only in dev/test when no secret is
+      // configured) must NOT verify: buildLineClient() should have generated
+      // a random secret instead, precisely because NODE_ENV is production.
+      const sigWithWellKnownSecret = computeLineSignature(clientModule.MOCK_DEFAULT_CHANNEL_SECRET, body)
+      expect(client.verifySignature(body, sigWithWellKnownSecret)).toBe(false)
+
+      // The client's own (random) secret still round-trips normally.
+      const ownSignature = client.sign(body)
+      expect(client.verifySignature(body, ownSignature)).toBe(true)
+
+      clientModule.resetLineClientForTests()
+    } finally {
+      vi.unstubAllEnvs()
+      if (originalSecret === undefined) delete process.env.LINE_CHANNEL_SECRET
+      else process.env.LINE_CHANNEL_SECRET = originalSecret
+      if (originalMode === undefined) delete process.env.LINE_MODE
+      else process.env.LINE_MODE = originalMode
+      vi.resetModules()
+    }
+  })
+})
+
 describe('getLineClient in live mode', () => {
   it('builds a LiveLineClient when LINE_MODE=live with a secret and token set', async () => {
     const originalMode = process.env.LINE_MODE

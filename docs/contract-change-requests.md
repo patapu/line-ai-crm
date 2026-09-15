@@ -28,6 +28,18 @@ Newest entries go at the top.
 
 ## Log
 
+### CR-3: Advisory lock in findOrOpenLeadForContact (plus two inbound LINE contact questions)
+
+- Date: 2026-09-15
+- Requested by: Lane C
+- File(s): modules/crm/service.ts (bodies of findOrOpenLeadForContact and findOrCreateContactByLineUserId only, no signature change)
+- Current contract: design section 4 says findOrOpenLeadForContact(tx, { contactId, ownerId, source, actor }) returns the latest lead for the contact that is not WON/LOST, else opens a NEW one. It says nothing about locking, so two concurrent transactions for the same contact can both see "no open lead" and both insert a NEW lead.
+- Proposed change: as the first statement inside findOrOpenLeadForContact, take a transaction-scoped lock on the contact id, for example `await tx.$executeRaw\`SELECT pg_advisory_xact_lock(hashtextextended(${'crm:contact:' + input.contactId}::text, 0::bigint))\``, before the find-then-create. Use pg_advisory_xact_lock (transaction scope), not a session lock, because Neon's PgBouncer runs in transaction mode. Please also confirm, in the same change: (a) findOrOpenLeadForContact writes the LEAD_CREATED Activity when it opens a lead (Lane C assumes yes and does not write one); (b) the firstName and source that findOrCreateContactByLineUserId sets on a new contact (Lane C passes displayName: null, fills Contact.lineDisplayName later through after(), and assumes source = LINE with a placeholder firstName).
+- Reason: docs/tasks/lane-C.md task 7 asks Lane C to flag this lock to Lane A, and Lane C must not edit modules/crm/service.ts. As an interim guard, Lane C takes its own pg_advisory_xact_lock on the LINE user id (key 'line:user:<lineUserId>') in modules/line/webhook.ts before it calls either CRM function. That covers the webhook path only, not other callers.
+- Impact on other lanes: Lane A: body change only. Lane C: none (lock order is always line user lock, then contact lock, so no deadlock). Lane B, Lane D: none.
+- Status: OPEN
+- Decision:
+
 ### CR-2: `client-only` is imported but not declared as a direct dependency
 
 - Date: 2026-09-16

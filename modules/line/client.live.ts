@@ -75,7 +75,7 @@ export class LiveLineClient implements LineClient {
       }
 
       const { errorCode, retryable } = classifyHttpFailure(res.status)
-      const message = ('LINE ' + res.status + ': ' + parseLineErrorMessage(bodyText)).slice(0, 200)
+      const message = (parseLineErrorMessage(bodyText) || 'LINE API error').slice(0, 200)
       return { ok: false, httpStatus: res.status, retryable, errorCode, message, requestId: reqId }
     } catch (err) {
       if (isTimeout(err)) {
@@ -105,7 +105,10 @@ export class LiveLineClient implements LineClient {
         headers: { authorization: 'Bearer ' + this.accessToken },
         signal: AbortSignal.timeout(TIMEOUT_MS),
       })
-      if (!res.ok) return null
+      if (!res.ok) {
+        await res.text().catch(() => '')
+        return null
+      }
 
       const json: unknown = await res.json()
       if (
