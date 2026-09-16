@@ -1,2 +1,12 @@
-/* OWNER: lane A (placeholder from layer 0) */
+/* OWNER: lane A */
 @import 'tailwindcss';
+
+@theme {
+  --font-sans: ui-sans-serif, system-ui, 'Noto Sans Thai', 'Leelawadee UI', sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased;
+  }
+}
