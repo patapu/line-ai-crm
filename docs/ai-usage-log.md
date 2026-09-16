@@ -79,3 +79,6 @@ Newest entries go at the top.
 - Pakorn chose to file CR-2 asking layer 0 to declare client-only in package.json, rather than
   replacing the import with a runtime guard, and asked for two test naming nits to be fixed (test
   titles now name TIE_REFETCH_CAP, a comment no longer cites line numbers).
+- On 2026-09-16 Pakorn approved CR-1 and CR-2 and asked for PR #1 to be merged; the approvals are
+  recorded in docs/contract-change-requests.md, and the frozen file changes they call for are left
+  for a separate layer 0 change.
