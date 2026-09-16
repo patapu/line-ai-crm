@@ -27,8 +27,11 @@ import {
   getSuggestionBadges,
   isDraftEdited,
   loginRedirectFor,
+  pendingToApplyOnActionFailure,
   pickCurrentSuggestion,
+  planMountLoad,
   requireBody,
+  type MountLoadSnapshot,
 } from '@/components/copilot/insight-panel-helpers'
 
 // [B] components/copilot/insight-panel-helpers.test.ts (G8). Pure functions,
@@ -288,6 +291,76 @@ describe('loginRedirectFor (S3 round 2)', () => {
   it('returns null when pathname is /login, even for a 401', () => {
     const err = new InsightRequestError(401, 'unauthorized')
     expect(loginRedirectFor(err, '/login', '')).toBeNull()
+  })
+})
+
+describe('planMountLoad', () => {
+  // All 8 boolean combinations of { historyRefreshed, actionCommitted, actionInFlight }.
+  // applyHistory = !historyRefreshed regardless of the other two flags;
+  // current precedence is committed > inFlight > apply.
+  it.each([
+    [{ historyRefreshed: false, actionCommitted: false, actionInFlight: false }, { applyHistory: true, current: 'apply' }],
+    [{ historyRefreshed: false, actionCommitted: false, actionInFlight: true }, { applyHistory: true, current: 'stash' }],
+    [{ historyRefreshed: false, actionCommitted: true, actionInFlight: false }, { applyHistory: true, current: 'skip' }],
+    [{ historyRefreshed: false, actionCommitted: true, actionInFlight: true }, { applyHistory: true, current: 'skip' }],
+    [{ historyRefreshed: true, actionCommitted: false, actionInFlight: false }, { applyHistory: false, current: 'apply' }],
+    [{ historyRefreshed: true, actionCommitted: false, actionInFlight: true }, { applyHistory: false, current: 'stash' }],
+    [{ historyRefreshed: true, actionCommitted: true, actionInFlight: false }, { applyHistory: false, current: 'skip' }],
+    [{ historyRefreshed: true, actionCommitted: true, actionInFlight: true }, { applyHistory: false, current: 'skip' }],
+  ] as const)('%j -> %j', (snapshot: MountLoadSnapshot, expected) => {
+    expect(planMountLoad(snapshot)).toEqual(expected)
+  })
+
+  it('committed takes precedence over inFlight (both true still skips, never stashes)', () => {
+    const plan = planMountLoad({ historyRefreshed: false, actionCommitted: true, actionInFlight: true })
+    expect(plan.current).toBe('skip')
+  })
+})
+
+describe('pendingToApplyOnActionFailure', () => {
+  it('returns null when current is already set, regardless of stashed', () => {
+    const current = makeSuggestion({ id: 'current' })
+    const stashed = makeSuggestion({ id: 'stashed' })
+    expect(pendingToApplyOnActionFailure({ current, stashed })).toBeNull()
+  })
+
+  it('returns null when current is set and stashed is null', () => {
+    const current = makeSuggestion({ id: 'current' })
+    expect(pendingToApplyOnActionFailure({ current, stashed: null })).toBeNull()
+  })
+
+  it('returns the stashed suggestion verbatim when current is null', () => {
+    const stashed = makeSuggestion({ id: 'stashed' })
+    expect(pendingToApplyOnActionFailure({ current: null, stashed })).toBe(stashed)
+  })
+
+  it('returns null when both current and stashed are null', () => {
+    expect(pendingToApplyOnActionFailure({ current: null, stashed: null })).toBeNull()
+  })
+})
+
+describe('planMountLoad + pendingToApplyOnActionFailure composed scenarios', () => {
+  it('a failed Ask AI during an in-flight mount load ends with the stashed PENDING suggestion applied', () => {
+    const stashedFromMount = makeSuggestion({ id: 'mount-pending', status: 'PENDING' })
+
+    // Mount load resolves while Ask AI is in flight: stash, don't apply.
+    const plan = planMountLoad({ historyRefreshed: false, actionCommitted: false, actionInFlight: true })
+    expect(plan.current).toBe('stash')
+    // Simulates the component: stashedPendingRef.current = pending
+    const stashedPendingRef = { current: stashedFromMount }
+
+    // Ask AI then fails without ever setting `current` (still null).
+    const applied = pendingToApplyOnActionFailure({ current: null, stashed: stashedPendingRef.current })
+    expect(applied).toBe(stashedFromMount)
+    expect(applied?.status).toBe('PENDING')
+  })
+
+  it('a slow mount load after a successful refresh does not apply history', () => {
+    // refreshHistory() already succeeded (historyRefreshedRef bumped), no action ever ran.
+    const plan = planMountLoad({ historyRefreshed: true, actionCommitted: false, actionInFlight: false })
+    expect(plan.applyHistory).toBe(false)
+    // current is still applied normally since nothing else touched it.
+    expect(plan.current).toBe('apply')
   })
 })
 

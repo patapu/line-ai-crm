@@ -148,11 +148,13 @@ export function ruleBasedSuggestion(ctx: LeadContext): CopilotOutput {
     800,
   )
 
-  // STAGE_CHANGED activities always get a derived text summary from
-  // context.ts (see parseStageChangeMeta there), even for a lead with no
-  // real conversation at all. Excluded here so a stage transition alone
-  // never counts as "content" and masks a genuinely empty lead behind a
-  // false hasAnyText, which would otherwise suppress the
+  // STAGE_CHANGED activities only get the derived "from -> to" text summary
+  // from context.ts when its parseStageChangeMeta can actually parse the
+  // activity's meta; when it cannot, context.ts falls back to whatever text
+  // the raw activity body gives it (or null), same as any other activity
+  // type. Either way, STAGE_CHANGED is excluded here so a stage transition
+  // alone never counts as "content" and masks a genuinely empty lead behind
+  // a false hasAnyText, which would otherwise suppress the
   // INSUFFICIENT_CONTEXT flag it should get.
   const hasAnyText =
     ctx.recentMessages.length > 0 || ctx.recentActivities.some((a) => a.text !== null && a.type !== 'STAGE_CHANGED')

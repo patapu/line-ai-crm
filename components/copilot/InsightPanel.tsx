@@ -80,6 +80,8 @@ import {
   isDraftEdited,
   loginRedirectFor,
   pickCurrentSuggestion,
+  pendingToApplyOnActionFailure,
+  planMountLoad,
   requireBody,
   type SuggestionBadgeItem,
 } from './insight-panel-helpers'
@@ -169,29 +171,67 @@ export function InsightPanel({ leadId, canApprove }: InsightPanelProps) {
   // caused. Using a ref (rather than state) here means that effect never
   // calls a state setter, so it can never trip react-hooks/set-state-in-effect.
   const pendingFocusRef = useRef<'current' | 'outcome' | null>(null)
-  // Set once Ask AI, Approve or Reject starts. Guards against the mount
-  // history load's fetch resolving after one of those actions has already
-  // moved current/draft/outcome/phase forward: once an action is in flight
-  // (or has finished), that action's own success/error handling is the
-  // source of truth for those fields, so the mount load's `.then` below is
-  // only ever allowed to refresh history and hasLine after this flips.
+  // True only while an Ask AI / Approve / Reject fetch is pending, flipped
+  // back to false in that action's own `finally` (success or failure alike).
+  // While true, the mount history load's `.then` below must not touch
+  // current/draft/outcome/phase itself (that could stomp on 'requesting' or
+  // race the action's own result); it stashes its pick into
+  // stashedPendingRef instead. Transient by design: unlike actionCommittedRef
+  // below, this never sticks, so a later mount-load resolution is never
+  // blocked just because *some* action ran and finished.
   const actionInFlightRef = useRef(false)
+  // Set once Ask AI, Approve or Reject *successfully* commits a new
+  // current/draft/outcome/phase. Sticky for the rest of this mount: once an
+  // action has established the source of truth for those fields, the mount
+  // load's `.then` must never overwrite them again, no matter how late it
+  // resolves. A failed action does NOT set this, which is what lets a
+  // still-pending mount load (or its stash) apply instead.
+  const actionCommittedRef = useRef(false)
+  // Set by the mount load's `.then` when it resolves while an action is in
+  // flight (see planMountLoad's 'stash' outcome): the pending suggestion it
+  // would have shown, held here until that action finishes. Consumed by
+  // pendingToApplyOnActionFailure in the action's own catch block, only when
+  // the action failed and never set `current` itself; a successful action
+  // ignores it (actionCommittedRef already covers that case).
+  const stashedPendingRef = useRef<SuggestionView | null>(null)
+  // Bumped by a successful refreshHistory() call. Once true, the mount
+  // load's `.then` must skip setHistory/setHasLine even if it resolves after
+  // refreshHistory: otherwise a slow initial fetch can land after a
+  // newer, already-rendered list and silently roll it back.
+  const historyRefreshedRef = useRef(false)
 
   useEffect(() => {
     let cancelled = false
+    // Ref-only reset for the new leadId: no setState here, so this can never
+    // trip react-hooks/set-state-in-effect. Each of these refs tracks state
+    // for the *current* mount only; a leadId change starts a fresh one.
+    actionInFlightRef.current = false
+    actionCommittedRef.current = false
+    stashedPendingRef.current = null
+    historyRefreshedRef.current = false
 
     fetchHistory(leadId)
       .then((result) => {
         if (cancelled) return
-        setHistory(result.items)
-        setHasLine(result.hasLine)
-        if (!result.hasLine) setSend(false)
-        if (actionInFlightRef.current) return
+        const plan = planMountLoad({
+          historyRefreshed: historyRefreshedRef.current,
+          actionCommitted: actionCommittedRef.current,
+          actionInFlight: actionInFlightRef.current,
+        })
+        if (plan.applyHistory) {
+          setHistory(result.items)
+          setHasLine(result.hasLine)
+          if (!result.hasLine) setSend(false)
+        }
         const pending = pickCurrentSuggestion(result.items)
-        setCurrent(pending)
-        setDraft(pending?.draftReply ?? '')
-        setOutcome(null)
-        setPhase(pending ? 'result' : 'idle')
+        if (plan.current === 'apply') {
+          setCurrent(pending)
+          setDraft(pending?.draftReply ?? '')
+          setOutcome(null)
+          setPhase(pending ? 'result' : 'idle')
+        } else if (plan.current === 'stash') {
+          stashedPendingRef.current = pending
+        }
       })
       .catch((err: unknown) => {
         if (cancelled) return
@@ -221,6 +261,7 @@ export function InsightPanel({ leadId, canApprove }: InsightPanelProps) {
   async function refreshHistory(): Promise<void> {
     try {
       const result = await fetchHistory(leadId)
+      historyRefreshedRef.current = true
       setHistory(result.items)
       setHasLine(result.hasLine)
       if (!result.hasLine) setSend(false)
@@ -250,6 +291,7 @@ export function InsightPanel({ leadId, canApprove }: InsightPanelProps) {
       requireBody(body, 'suggestion')
 
       const suggestion = (body as { suggestion: SuggestionView }).suggestion
+      actionCommittedRef.current = true
       setCurrent(suggestion)
       setDraft(suggestion.draftReply ?? '')
       setSend(false)
@@ -273,7 +315,20 @@ export function InsightPanel({ leadId, canApprove }: InsightPanelProps) {
       setError(err instanceof Error ? err.message : ERROR_GENERIC)
       setErrorScope('ask')
       setPhase('error')
+      // If the mount load resolved while this request was in flight, it
+      // stashed its pending pick instead of applying it (planMountLoad's
+      // 'stash' outcome). Now that this action has failed without ever
+      // setting `current` itself, apply that stash so an existing PENDING
+      // suggestion is not hidden behind IDLE_TEXT until some later success.
+      const stashed = pendingToApplyOnActionFailure({ current, stashed: stashedPendingRef.current })
+      if (stashed) {
+        setCurrent(stashed)
+        setDraft(stashed.draftReply ?? '')
+        setOutcome(null)
+        stashedPendingRef.current = null
+      }
     } finally {
+      actionInFlightRef.current = false
       if (!redirected) setBusy(false)
     }
   }
@@ -296,6 +351,7 @@ export function InsightPanel({ leadId, canApprove }: InsightPanelProps) {
       requireBody(body, 'suggestion')
 
       const approveBody = body as { suggestion: SuggestionView; message: ApprovedMessageView | null }
+      actionCommittedRef.current = true
       setCurrent(approveBody.suggestion)
       setLastMessage(approveBody.message ?? null)
       setOutcome('APPROVED')
@@ -309,7 +365,20 @@ export function InsightPanel({ leadId, canApprove }: InsightPanelProps) {
       }
       setError(err instanceof Error ? err.message : ERROR_GENERIC)
       setErrorScope('decide')
+      // See handleAskAi: current can only be null here if the lead had no
+      // PENDING suggestion when this render's `current` closure was formed,
+      // which canSubmitApprove already prevents, so this is a no-op for
+      // Approve/Reject today, kept for symmetry and to stay correct if that
+      // guard ever loosens.
+      const stashed = pendingToApplyOnActionFailure({ current, stashed: stashedPendingRef.current })
+      if (stashed) {
+        setCurrent(stashed)
+        setDraft(stashed.draftReply ?? '')
+        setOutcome(null)
+        stashedPendingRef.current = null
+      }
     } finally {
+      actionInFlightRef.current = false
       if (!redirected) setBusy(false)
     }
   }
@@ -332,6 +401,7 @@ export function InsightPanel({ leadId, canApprove }: InsightPanelProps) {
       if (!res.ok) throw new InsightRequestError(res.status, describeApiError(res.status, body))
       requireBody(body, 'suggestion')
 
+      actionCommittedRef.current = true
       setCurrent((body as { suggestion: SuggestionView }).suggestion)
       setReason('')
       setLastMessage(null)
@@ -346,7 +416,17 @@ export function InsightPanel({ leadId, canApprove }: InsightPanelProps) {
       }
       setError(err instanceof Error ? err.message : ERROR_GENERIC)
       setErrorScope('decide')
+      // See handleApprove: a no-op today (current can't be null when Reject
+      // runs), kept for symmetry with handleAskAi and future-proofing.
+      const stashed = pendingToApplyOnActionFailure({ current, stashed: stashedPendingRef.current })
+      if (stashed) {
+        setCurrent(stashed)
+        setDraft(stashed.draftReply ?? '')
+        setOutcome(null)
+        stashedPendingRef.current = null
+      }
     } finally {
+      actionInFlightRef.current = false
       if (!redirected) setBusy(false)
     }
   }
@@ -380,7 +460,7 @@ export function InsightPanel({ leadId, canApprove }: InsightPanelProps) {
             size="sm"
             variant="primary"
             aria-disabled={busy}
-            className="w-full sm:w-auto aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+            className="w-full sm:w-auto aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-slate-900"
             onClick={() => {
               if (busy) return
               handleAskAi()
@@ -684,7 +764,7 @@ function DecisionControls({
         size="sm"
         variant="primary"
         aria-disabled={approveDisabled}
-        className="w-full sm:w-auto sm:self-start aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+        className="w-full sm:w-auto sm:self-start aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-slate-900"
         onClick={() => {
           if (approveDisabled) return
           onApprove()
@@ -722,7 +802,7 @@ function DecisionControls({
           size="sm"
           variant="secondary"
           aria-disabled={rejectDisabled}
-          className="w-full sm:w-auto sm:self-start aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+          className="w-full sm:w-auto sm:self-start aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-white"
           onClick={() => {
             if (rejectDisabled) return
             onReject()

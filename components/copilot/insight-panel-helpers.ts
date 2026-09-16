@@ -273,3 +273,57 @@ export function loginRedirectFor(err: unknown, pathname: string, search: string)
   if (!(err instanceof InsightRequestError) || err.status !== 401) return null
   return buildLoginRedirect(pathname, search)
 }
+
+/** What the mount-load `.then` callback should do with `current`/`draft`/`outcome`/`phase`: apply its own pick now, stash it for a possible later apply on action failure, or skip it entirely. */
+export type MountLoadCurrentAction = 'apply' | 'stash' | 'skip'
+
+/** Plain snapshot of the three refs InsightPanel tracks across the mount history load's lifetime, read at the moment that load resolves. */
+export interface MountLoadSnapshot {
+  /** True once a later, successful refreshHistory() call has already landed. */
+  historyRefreshed: boolean
+  /** True once some action (Ask AI / Approve / Reject) has successfully committed current/draft/outcome/phase. Sticky for the rest of the mount. */
+  actionCommitted: boolean
+  /** True while some action's fetch is currently pending (not yet succeeded or failed). Transient. */
+  actionInFlight: boolean
+}
+
+export interface MountLoadPlan {
+  /** Whether to setHistory/setHasLine (and setSend(false) when hasLine is false) from this result. */
+  applyHistory: boolean
+  current: MountLoadCurrentAction
+}
+
+/**
+ * Pure decision for the mount history load's `.then` callback (finding 1 and
+ * 2 of the S1 fix pass). `historyRefreshed` gates history/hasLine
+ * independently of `current`: a successful refreshHistory always wins there,
+ * regardless of any in-flight or committed action. For `current`: a
+ * committed action has already established the source of truth, so the
+ * mount load must skip it forever; an in-flight action has not yet decided
+ * anything, so the mount load stashes its pick instead of applying it
+ * (applying now could show a suggestion while phase is still 'requesting',
+ * or get clobbered a moment later by that action's own success); otherwise
+ * nothing else has ever touched current, so the mount load applies directly.
+ */
+export function planMountLoad(snapshot: MountLoadSnapshot): MountLoadPlan {
+  const applyHistory = !snapshot.historyRefreshed
+  if (snapshot.actionCommitted) return { applyHistory, current: 'skip' }
+  if (snapshot.actionInFlight) return { applyHistory, current: 'stash' }
+  return { applyHistory, current: 'apply' }
+}
+
+/**
+ * Pure decision for an action's (Ask AI / Approve / Reject) catch block:
+ * whether to apply a suggestion the mount load stashed while this action was
+ * in flight (planMountLoad's 'stash' outcome), now that the action has
+ * failed. Only applies when the action itself never set `current` (Approve
+ * and Reject require a non-null `current` to run at all, so this only ever
+ * matters for a failed Ask AI); returns null otherwise, meaning "do nothing".
+ */
+export function pendingToApplyOnActionFailure(input: {
+  current: SuggestionView | null
+  stashed: SuggestionView | null
+}): SuggestionView | null {
+  if (input.current !== null) return null
+  return input.stashed
+}

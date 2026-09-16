@@ -199,6 +199,14 @@ describe('ruleBasedSuggestion: confidence and flags', () => {
     expect(ruleBasedSuggestion(ctx).flags).toContain('INSUFFICIENT_CONTEXT')
   })
 
+  it('still flags INSUFFICIENT_CONTEXT when the only STAGE_CHANGED activity has a derived reason in its text (S2)', () => {
+    const ctx = makeCtx({
+      recentMessages: [],
+      recentActivities: [{ at: daysAgoIso(1), type: 'STAGE_CHANGED', text: 'NEW -> LOST (budget)' }],
+    })
+    expect(ruleBasedSuggestion(ctx).flags).toContain('INSUFFICIENT_CONTEXT')
+  })
+
   it('does not flag INSUFFICIENT_CONTEXT when there is a NOTE activity with text (S3 round 2)', () => {
     const ctx = makeCtx({
       recentMessages: [],
