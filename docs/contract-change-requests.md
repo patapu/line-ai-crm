@@ -38,7 +38,7 @@ Newest entries go at the top.
 - Reason: the import breaks if a future `next` or `styled-jsx` release drops or moves that dependency, or if a stricter installer or hoisting layout stops exposing it at the top level. (Alternative considered: replace the import with a runtime `typeof window` guard; Pakorn chose this CR instead.)
 - Impact on other lanes: none known. This only adds a dependency declaration; no Lane A code change is needed after it lands.
 - Status: APPROVED
-- Decision: 2026-09-16, approved by Pakorn ("อนุมัติ CR-1 กับ CR-2 แล้ว merge PR ได้เลย", meaning both CRs are approved and PR #1 can be merged). Implementation is pending as a separate layer 0 (F) change to the frozen file(s): `package.json` and `package-lock.json`.
+- Decision: 2026-09-16, approved by Pakorn ("อนุมัติ CR-1 กับ CR-2 แล้ว merge PR ได้เลย", meaning both CRs are approved and PR #1 can be merged). Implemented as a layer 0 (F) change in PR #2 (https://github.com/patapu/line-ai-crm/pull/2) on branch `layer0-cr-1-cr-2`: `client-only` is declared in `package.json` and `package-lock.json`.
 
 ### CR-1: Lead.value max exceeds the Decimal(12,2) column it is stored in
 
@@ -50,4 +50,4 @@ Newest entries go at the top.
 - Reason: a value of exactly `1e10` (or anything up to it) passes validation but is one cent or more above what the column can hold; without a schema fix, only a runtime guard in the service layer prevents an overflow write. Lane A added that guard in `modules/crm/service.ts` (`createLead`, `updateLead`) as a stopgap, but the contract itself should be corrected.
 - Impact on other lanes: none known. `LeadCreate`/`LeadUpdate` are only consumed by Lane A's routes and service.
 - Status: APPROVED
-- Decision: 2026-09-16, approved by Pakorn ("อนุมัติ CR-1 กับ CR-2 แล้ว merge PR ได้เลย", meaning both CRs are approved and PR #1 can be merged). Implementation is pending as a separate layer 0 (F) change to the frozen file(s): `lib/contracts/crm.ts`. Lane A's service guard in `modules/crm/service.ts` stays in place until that change lands.
+- Decision: 2026-09-16, approved by Pakorn ("อนุมัติ CR-1 กับ CR-2 แล้ว merge PR ได้เลย", meaning both CRs are approved and PR #1 can be merged). Implemented as a layer 0 (F) change in PR #2 (https://github.com/patapu/line-ai-crm/pull/2) on branch `layer0-cr-1-cr-2`: `lib/contracts/crm.ts` caps `value` at 9,999,999,999.99 in whole cents. Lane A's service guard in `modules/crm/service.ts` stays as defence in depth.
