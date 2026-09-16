@@ -97,3 +97,4 @@ Newest entries go at the top.
   then caught that the first version of the new comment wrongly named prisma/seed.ts as a
   guarded caller, so the comment now says it protects any direct caller that skips contract
   parsing. Pakorn asked for this PR to be opened and merged.
+- Pakorn asked to drop "stopgap" from the CR-1 Reason line; it now points to defence in depth.
