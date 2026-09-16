@@ -79,9 +79,11 @@ import {
   getSuggestionBadgeItems,
   isDraftEdited,
   loginRedirectFor,
+  pickAfterFailureRefresh,
   pickCurrentSuggestion,
   pendingToApplyOnActionFailure,
   planMountLoad,
+  planMountLoadFailure,
   requireBody,
   type SuggestionBadgeItem,
 } from './insight-panel-helpers'
@@ -192,19 +194,29 @@ export function InsightPanel({ leadId, canApprove }: InsightPanelProps) {
   // would have shown, held here until that action finishes. Consumed by
   // pendingToApplyOnActionFailure in the action's own catch block, only when
   // the action failed and never set `current` itself; a successful action
-  // ignores it (actionCommittedRef already covers that case).
+  // clears it back to null instead (actionCommittedRef already covers that
+  // case, and a stale stash must never outlive the mount load it came from).
   const stashedPendingRef = useRef<SuggestionView | null>(null)
   // Bumped by a successful refreshHistory() call. Once true, the mount
   // load's `.then` must skip setHistory/setHasLine even if it resolves after
   // refreshHistory: otherwise a slow initial fetch can land after a
   // newer, already-rendered list and silently roll it back.
   const historyRefreshedRef = useRef(false)
+  // The leadId the mount effect below last started loading for, i.e. the
+  // "owner" of every write an in-flight handler (Ask AI / Approve / Reject /
+  // refreshHistory) is allowed to make. Handlers capture this at their own
+  // start and compare it again after each await; a mismatch means the
+  // leadId prop changed while the handler's fetch was in flight, so its
+  // result belongs to a lead this component no longer shows and every
+  // further state write for it must be skipped (finding 3, S1 fix pass).
+  const mountedLeadIdRef = useRef(leadId)
 
   useEffect(() => {
     let cancelled = false
     // Ref-only reset for the new leadId: no setState here, so this can never
     // trip react-hooks/set-state-in-effect. Each of these refs tracks state
     // for the *current* mount only; a leadId change starts a fresh one.
+    mountedLeadIdRef.current = leadId
     actionInFlightRef.current = false
     actionCommittedRef.current = false
     stashedPendingRef.current = null
@@ -236,9 +248,19 @@ export function InsightPanel({ leadId, canApprove }: InsightPanelProps) {
       .catch((err: unknown) => {
         if (cancelled) return
         if (redirectOnUnauthorized(err, router)) return
-        setError(err instanceof Error ? err.message : ERROR_GENERIC)
-        setErrorScope('load')
-        setPhase('error')
+        // Finding 1 (S1 fix pass): the initial history load failing must
+        // never override an in-flight or already-committed Ask AI / Approve
+        // / Reject action with a load error; only surface it when nothing
+        // else has touched this mount yet.
+        const plan = planMountLoadFailure({
+          actionInFlight: actionInFlightRef.current,
+          actionCommitted: actionCommittedRef.current,
+        })
+        if (plan.showLoadError) {
+          setError(err instanceof Error ? err.message : ERROR_GENERIC)
+          setErrorScope('load')
+          setPhase('error')
+        }
       })
 
     return () => {
@@ -258,22 +280,33 @@ export function InsightPanel({ leadId, canApprove }: InsightPanelProps) {
     pendingFocusRef.current = null
   })
 
-  async function refreshHistory(): Promise<void> {
+  // Returns the fetched result on success (so a caller like handleAskAi's
+  // catch block can re-pick `current` from it) or null on failure. `expectedLeadId`
+  // is the caller's own mountedLeadIdRef snapshot from when its handler
+  // started (finding 3, S1 fix pass): if the leadId prop has since moved on,
+  // this skips its own state writes and reports null, exactly like a failed
+  // fetch, so the caller's existing failure handling also uses the guard for
+  // free.
+  async function refreshHistory(expectedLeadId: string): Promise<HistoryResult | null> {
     try {
       const result = await fetchHistory(leadId)
+      if (mountedLeadIdRef.current !== expectedLeadId) return null
       historyRefreshedRef.current = true
       setHistory(result.items)
       setHasLine(result.hasLine)
       if (!result.hasLine) setSend(false)
+      return result
     } catch {
       // History is a convenience view; a failed refetch here keeps whatever
       // the last successful response left in state, instead of stacking a
       // second error banner on top of an approve/reject result that already
       // succeeded.
+      return null
     }
   }
 
   async function handleAskAi(): Promise<void> {
+    const startedFor = mountedLeadIdRef.current
     actionInFlightRef.current = true
     setBusy(true)
     setError(null)
@@ -289,9 +322,14 @@ export function InsightPanel({ leadId, canApprove }: InsightPanelProps) {
       const body = await parseJsonSafely(res)
       if (!res.ok) throw new InsightRequestError(res.status, describeApiError(res.status, body))
       requireBody(body, 'suggestion')
+      // Finding 3 (S1 fix pass): both awaits above may resolve after leadId
+      // has since moved on to a different lead; that response belongs to a
+      // lead this component no longer shows, so skip every write for it.
+      if (mountedLeadIdRef.current !== startedFor) return
 
       const suggestion = (body as { suggestion: SuggestionView }).suggestion
       actionCommittedRef.current = true
+      stashedPendingRef.current = null
       setCurrent(suggestion)
       setDraft(suggestion.draftReply ?? '')
       setSend(false)
@@ -301,7 +339,8 @@ export function InsightPanel({ leadId, canApprove }: InsightPanelProps) {
       setOutcome(null)
       setPhase('result')
       pendingFocusRef.current = 'current'
-      await refreshHistory()
+      await refreshHistory(startedFor)
+      if (mountedLeadIdRef.current !== startedFor) return
       router.refresh()
     } catch (err) {
       if (redirectOnUnauthorized(err, router)) {
@@ -312,29 +351,69 @@ export function InsightPanel({ leadId, canApprove }: InsightPanelProps) {
         redirected = true
         return
       }
+      if (mountedLeadIdRef.current !== startedFor) return
       setError(err instanceof Error ? err.message : ERROR_GENERIC)
       setErrorScope('ask')
       setPhase('error')
-      // If the mount load resolved while this request was in flight, it
-      // stashed its pending pick instead of applying it (planMountLoad's
-      // 'stash' outcome). Now that this action has failed without ever
-      // setting `current` itself, apply that stash so an existing PENDING
-      // suggestion is not hidden behind IDLE_TEXT until some later success.
-      const stashed = pendingToApplyOnActionFailure({ current, stashed: stashedPendingRef.current })
-      if (stashed) {
-        setCurrent(stashed)
-        setDraft(stashed.draftReply ?? '')
-        setOutcome(null)
-        stashedPendingRef.current = null
+
+      // Finding 1 (S1 fix pass 2): on every non-401 Ask AI failure, re-check
+      // the server before deciding what `current` should show. `renderedCurrent`
+      // is what this handler's own render actually had on screen at click
+      // time (the `current` state closure, never the mount load's stash): a
+      // stash that was never rendered has no on-screen value to protect, so
+      // comparing against it (as pass 1 did) could wrongly treat an
+      // already-PENDING re-pick as a no-op and leave it hidden. The stash is
+      // only ever used as a last-resort fallback below, via
+      // pendingToApplyOnActionFailure, when the refresh itself also fails.
+      const stashedAtFailure = stashedPendingRef.current
+      const renderedCurrent = current
+      stashedPendingRef.current = null
+
+      // Refresh BEFORE applying anything, so a stashed suggestion never
+      // flashes on screen just to be immediately replaced once the refresh
+      // lands (previously the stash was applied first, then possibly
+      // corrected after refreshing).
+      const refreshed = await refreshHistory(startedFor)
+      if (mountedLeadIdRef.current !== startedFor) return
+      if (refreshed) {
+        const picked = pickAfterFailureRefresh({ current: renderedCurrent, items: refreshed.items })
+        // Id comparison, not reference: pickAfterFailureRefresh returns
+        // `input.current` back unchanged on a same-id no-op, but `renderedCurrent`
+        // itself is a plain value here, not necessarily `===` to whatever the
+        // helper returns from `items`.
+        if (picked?.id !== renderedCurrent?.id) {
+          setCurrent(picked)
+          setDraft(picked?.draftReply ?? '')
+          setOutcome(null)
+        }
+      } else {
+        // Refresh failed too: fall back to applying the stash, same helper
+        // and same rule handleApprove/handleReject already use, so an
+        // existing PENDING suggestion from the mount load is still not
+        // hidden behind IDLE_TEXT just because both this action and the
+        // refresh failed.
+        const toApply = pendingToApplyOnActionFailure({ current: renderedCurrent, stashed: stashedAtFailure })
+        if (toApply) {
+          setCurrent(toApply)
+          setDraft(toApply.draftReply ?? '')
+          setOutcome(null)
+        }
       }
     } finally {
-      actionInFlightRef.current = false
+      if (mountedLeadIdRef.current === startedFor) {
+        actionInFlightRef.current = false
+      }
+      // Finding 3 (S1 fix pass 2): clear busy even for a stale handler whose
+      // leadId has since moved on, so a slow request for a lead the user has
+      // navigated away from never leaves the new lead's controls locked.
+      // Every other write above is already guarded to the old lead only.
       if (!redirected) setBusy(false)
     }
   }
 
   async function handleApprove(): Promise<void> {
     if (!current) return
+    const startedFor = mountedLeadIdRef.current
     actionInFlightRef.current = true
     setBusy(true)
     setError(null)
@@ -349,20 +428,25 @@ export function InsightPanel({ leadId, canApprove }: InsightPanelProps) {
       const body = await parseJsonSafely(res)
       if (!res.ok) throw new InsightRequestError(res.status, describeApiError(res.status, body))
       requireBody(body, 'suggestion')
+      // Finding 3 (S1 fix pass): see handleAskAi.
+      if (mountedLeadIdRef.current !== startedFor) return
 
       const approveBody = body as { suggestion: SuggestionView; message: ApprovedMessageView | null }
       actionCommittedRef.current = true
+      stashedPendingRef.current = null
       setCurrent(approveBody.suggestion)
       setLastMessage(approveBody.message ?? null)
       setOutcome('APPROVED')
       pendingFocusRef.current = 'outcome'
-      await refreshHistory()
+      await refreshHistory(startedFor)
+      if (mountedLeadIdRef.current !== startedFor) return
       router.refresh()
     } catch (err) {
       if (redirectOnUnauthorized(err, router)) {
         redirected = true
         return
       }
+      if (mountedLeadIdRef.current !== startedFor) return
       setError(err instanceof Error ? err.message : ERROR_GENERIC)
       setErrorScope('decide')
       // See handleAskAi: current can only be null here if the lead had no
@@ -378,13 +462,17 @@ export function InsightPanel({ leadId, canApprove }: InsightPanelProps) {
         stashedPendingRef.current = null
       }
     } finally {
-      actionInFlightRef.current = false
+      if (mountedLeadIdRef.current === startedFor) {
+        actionInFlightRef.current = false
+      }
+      // Finding 3 (S1 fix pass 2): see handleAskAi.
       if (!redirected) setBusy(false)
     }
   }
 
   async function handleReject(): Promise<void> {
     if (!current) return
+    const startedFor = mountedLeadIdRef.current
     actionInFlightRef.current = true
     setBusy(true)
     setError(null)
@@ -400,20 +488,25 @@ export function InsightPanel({ leadId, canApprove }: InsightPanelProps) {
       const body = await parseJsonSafely(res)
       if (!res.ok) throw new InsightRequestError(res.status, describeApiError(res.status, body))
       requireBody(body, 'suggestion')
+      // Finding 3 (S1 fix pass): see handleAskAi.
+      if (mountedLeadIdRef.current !== startedFor) return
 
       actionCommittedRef.current = true
+      stashedPendingRef.current = null
       setCurrent((body as { suggestion: SuggestionView }).suggestion)
       setReason('')
       setLastMessage(null)
       setOutcome('REJECTED')
       pendingFocusRef.current = 'outcome'
-      await refreshHistory()
+      await refreshHistory(startedFor)
+      if (mountedLeadIdRef.current !== startedFor) return
       router.refresh()
     } catch (err) {
       if (redirectOnUnauthorized(err, router)) {
         redirected = true
         return
       }
+      if (mountedLeadIdRef.current !== startedFor) return
       setError(err instanceof Error ? err.message : ERROR_GENERIC)
       setErrorScope('decide')
       // See handleApprove: a no-op today (current can't be null when Reject
@@ -426,7 +519,10 @@ export function InsightPanel({ leadId, canApprove }: InsightPanelProps) {
         stashedPendingRef.current = null
       }
     } finally {
-      actionInFlightRef.current = false
+      if (mountedLeadIdRef.current === startedFor) {
+        actionInFlightRef.current = false
+      }
+      // Finding 3 (S1 fix pass 2): see handleAskAi.
       if (!redirected) setBusy(false)
     }
   }
@@ -463,7 +559,7 @@ export function InsightPanel({ leadId, canApprove }: InsightPanelProps) {
             className="w-full sm:w-auto aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-slate-900"
             onClick={() => {
               if (busy) return
-              handleAskAi()
+              void handleAskAi()
             }}
           >
             {phase === 'requesting' ? ASK_AI_BUSY_LABEL : ASK_AI_LABEL}
@@ -479,7 +575,12 @@ export function InsightPanel({ leadId, canApprove }: InsightPanelProps) {
         )}
       </div>
 
-      {!current && phase !== 'loading' && errorScope !== 'load' && <p className="text-sm text-slate-600">{IDLE_TEXT}</p>}
+      {/* Finding 1 (S1 fix pass): gated on phase, not on errorScope alone, so an
+          Ask AI failure (errorScope 'ask') that never confirmed a real
+          current/history state (no stash, refresh also failed) does not
+          render this as a fact either; phase stays 'error' for exactly that
+          case, see handleAskAi. */}
+      {!current && phase !== 'loading' && phase !== 'error' && <p className="text-sm text-slate-600">{IDLE_TEXT}</p>}
 
       {current && (
         <SuggestionSection
@@ -508,7 +609,7 @@ export function InsightPanel({ leadId, canApprove }: InsightPanelProps) {
         />
       )}
 
-      <HistorySection history={history} loading={phase === 'loading'} />
+      <HistorySection history={history} phase={phase} />
     </Card>
   )
 }
@@ -767,7 +868,7 @@ function DecisionControls({
         className="w-full sm:w-auto sm:self-start aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-slate-900"
         onClick={() => {
           if (approveDisabled) return
-          onApprove()
+          void onApprove()
         }}
       >
         {approveLabel}
@@ -805,7 +906,7 @@ function DecisionControls({
           className="w-full sm:w-auto sm:self-start aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-white"
           onClick={() => {
             if (rejectDisabled) return
-            onReject()
+            void onReject()
           }}
         >
           {REJECT_LABEL}
@@ -815,13 +916,20 @@ function DecisionControls({
   )
 }
 
-function HistorySection({ history, loading }: { history: SuggestionView[]; loading: boolean }) {
+function HistorySection({ history, phase }: { history: SuggestionView[]; phase: Phase }) {
+  // Finding 1 (S1 fix pass): an empty list only means "no suggestions yet"
+  // when a load actually confirmed that. While loading, nothing is known
+  // yet; while phase is 'error' (a load failure, or an Ask AI failure that
+  // never confirmed a real state, see handleAskAi), an empty `history` may
+  // just mean the fetch that would have populated it never completed, so
+  // this must not render as a fact either.
+  const knownEmpty = history.length === 0 && phase !== 'loading' && phase !== 'error'
   return (
     <section aria-labelledby="insight-panel-history" className="border-t border-slate-200 pt-4">
       <h3 id="insight-panel-history" className="text-sm font-semibold text-slate-900">
         {HISTORY_HEADING}
       </h3>
-      {history.length === 0 && !loading && <p className="text-sm text-slate-600">{HISTORY_EMPTY}</p>}
+      {knownEmpty && <p className="text-sm text-slate-600">{HISTORY_EMPTY}</p>}
       {history.length > 0 && (
         <ul className="divide-y divide-slate-200">
           {history.map((item) => (

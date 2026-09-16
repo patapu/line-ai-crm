@@ -28,9 +28,12 @@ import {
   isDraftEdited,
   loginRedirectFor,
   pendingToApplyOnActionFailure,
+  pickAfterFailureRefresh,
   pickCurrentSuggestion,
   planMountLoad,
+  planMountLoadFailure,
   requireBody,
+  type MountLoadFailureSnapshot,
   type MountLoadSnapshot,
 } from '@/components/copilot/insight-panel-helpers'
 
@@ -297,14 +300,16 @@ describe('loginRedirectFor (S3 round 2)', () => {
 describe('planMountLoad', () => {
   // All 8 boolean combinations of { historyRefreshed, actionCommitted, actionInFlight }.
   // applyHistory = !historyRefreshed regardless of the other two flags;
-  // current precedence is committed > inFlight > apply.
+  // historyRefreshed now forces current: 'skip' unconditionally (checked
+  // before actionCommitted/actionInFlight); otherwise current precedence is
+  // committed > inFlight > apply.
   it.each([
     [{ historyRefreshed: false, actionCommitted: false, actionInFlight: false }, { applyHistory: true, current: 'apply' }],
     [{ historyRefreshed: false, actionCommitted: false, actionInFlight: true }, { applyHistory: true, current: 'stash' }],
     [{ historyRefreshed: false, actionCommitted: true, actionInFlight: false }, { applyHistory: true, current: 'skip' }],
     [{ historyRefreshed: false, actionCommitted: true, actionInFlight: true }, { applyHistory: true, current: 'skip' }],
-    [{ historyRefreshed: true, actionCommitted: false, actionInFlight: false }, { applyHistory: false, current: 'apply' }],
-    [{ historyRefreshed: true, actionCommitted: false, actionInFlight: true }, { applyHistory: false, current: 'stash' }],
+    [{ historyRefreshed: true, actionCommitted: false, actionInFlight: false }, { applyHistory: false, current: 'skip' }],
+    [{ historyRefreshed: true, actionCommitted: false, actionInFlight: true }, { applyHistory: false, current: 'skip' }],
     [{ historyRefreshed: true, actionCommitted: true, actionInFlight: false }, { applyHistory: false, current: 'skip' }],
     [{ historyRefreshed: true, actionCommitted: true, actionInFlight: true }, { applyHistory: false, current: 'skip' }],
   ] as const)('%j -> %j', (snapshot: MountLoadSnapshot, expected) => {
@@ -314,6 +319,11 @@ describe('planMountLoad', () => {
   it('committed takes precedence over inFlight (both true still skips, never stashes)', () => {
     const plan = planMountLoad({ historyRefreshed: false, actionCommitted: true, actionInFlight: true })
     expect(plan.current).toBe('skip')
+  })
+
+  it('historyRefreshed forces skip even when nothing else has touched current (finding 2, pass 2)', () => {
+    const plan = planMountLoad({ historyRefreshed: true, actionCommitted: false, actionInFlight: false })
+    expect(plan).toEqual({ applyHistory: false, current: 'skip' })
   })
 })
 
@@ -355,12 +365,136 @@ describe('planMountLoad + pendingToApplyOnActionFailure composed scenarios', () 
     expect(applied?.status).toBe('PENDING')
   })
 
-  it('a slow mount load after a successful refresh does not apply history', () => {
+  it('a slow mount load after a successful refresh does not apply history or current (finding 2, pass 2)', () => {
     // refreshHistory() already succeeded (historyRefreshedRef bumped), no action ever ran.
     const plan = planMountLoad({ historyRefreshed: true, actionCommitted: false, actionInFlight: false })
     expect(plan.applyHistory).toBe(false)
-    // current is still applied normally since nothing else touched it.
-    expect(plan.current).toBe('apply')
+    // current is skipped too: the refresh is newer truth than this slower
+    // mount load, so applying now could roll current/draft back to stale data.
+    expect(plan.current).toBe('skip')
+  })
+})
+
+describe('planMountLoadFailure', () => {
+  // Truth table over all 2x2 combinations of actionInFlight/actionCommitted:
+  // showLoadError is true only when both are false. `redirecting` was
+  // removed from MountLoadFailureSnapshot entirely (finding 5, pass 2): a
+  // 401 never reaches this function, so there is no longer a field for it.
+  it.each([
+    [{ actionInFlight: false, actionCommitted: false }, true],
+    [{ actionInFlight: false, actionCommitted: true }, false],
+    [{ actionInFlight: true, actionCommitted: false }, false],
+    [{ actionInFlight: true, actionCommitted: true }, false],
+  ] as const)('%j -> showLoadError %s', (snapshot: MountLoadFailureSnapshot, expected) => {
+    expect(planMountLoadFailure(snapshot)).toEqual({ showLoadError: expected })
+  })
+})
+
+describe('pickAfterFailureRefresh', () => {
+  it('same id still PENDING in items: returns input.current back by reference (no-op, protects an in-progress edit)', () => {
+    const current = makeSuggestion({ id: 'stashed', status: 'PENDING', createdAt: '2026-09-15T00:00:00.000Z' })
+    const sameFromServer = makeSuggestion({ id: 'stashed', status: 'PENDING', createdAt: '2026-09-15T00:00:00.000Z' })
+    const result = pickAfterFailureRefresh({ current, items: [sameFromServer] })
+    expect(result).toBe(current)
+  })
+
+  it('stash superseded, a newer PENDING item exists: returns the newer item', () => {
+    const current = makeSuggestion({ id: 'stashed', status: 'PENDING', createdAt: '2026-09-15T00:00:00.000Z' })
+    const superseded = makeSuggestion({ id: 'stashed', status: 'SUPERSEDED', createdAt: '2026-09-15T00:00:00.000Z' })
+    const newer = makeSuggestion({ id: 'newer', status: 'PENDING', createdAt: '2026-09-16T00:00:00.000Z' })
+    const result = pickAfterFailureRefresh({ current, items: [superseded, newer] })
+    expect(result).toBe(newer)
+  })
+
+  it('no PENDING item at all: returns null', () => {
+    const current = makeSuggestion({ id: 'stashed', status: 'PENDING' })
+    const superseded = makeSuggestion({ id: 'stashed', status: 'SUPERSEDED' })
+    const rejected = makeSuggestion({ id: 'other', status: 'REJECTED' })
+    expect(pickAfterFailureRefresh({ current, items: [superseded, rejected] })).toBeNull()
+    expect(pickAfterFailureRefresh({ current, items: [] })).toBeNull()
+  })
+
+  it('current is null, items has a PENDING item: returns that item (no id to match against)', () => {
+    const pending = makeSuggestion({ id: 'fresh', status: 'PENDING' })
+    expect(pickAfterFailureRefresh({ current: null, items: [pending] })).toBe(pending)
+  })
+
+  it('current is null, no PENDING item: returns null', () => {
+    expect(pickAfterFailureRefresh({ current: null, items: [] })).toBeNull()
+    expect(pickAfterFailureRefresh({ current: null, items: [makeSuggestion({ status: 'APPROVED' })] })).toBeNull()
+  })
+
+  it('multiple PENDING items in the list: picks the newest by createdAt, per pickCurrentSuggestion semantics', () => {
+    const current = makeSuggestion({ id: 'stashed', status: 'PENDING', createdAt: '2026-09-10T00:00:00.000Z' })
+    const superseded = makeSuggestion({ id: 'stashed', status: 'SUPERSEDED', createdAt: '2026-09-10T00:00:00.000Z' })
+    const older = makeSuggestion({ id: 'older', status: 'PENDING', createdAt: '2026-09-14T00:00:00.000Z' })
+    const newest = makeSuggestion({ id: 'newest', status: 'PENDING', createdAt: '2026-09-16T00:00:00.000Z' })
+    const result = pickAfterFailureRefresh({ current, items: [older, superseded, newest] })
+    expect(result).toBe(newest)
+  })
+})
+
+describe('pickAfterFailureRefresh composed with the Ask AI failure flow (refresh-first, S1 fix pass 2)', () => {
+  // The order changed from "apply the stash, then refresh" to "refresh
+  // first, then re-pick against what was actually RENDERED at click time
+  // (never the stash)". The stash is only ever applied separately, as a
+  // last-resort fallback via pendingToApplyOnActionFailure, when the refresh
+  // itself also fails (Case C below).
+
+  it('Case A (the major regression this pass fixed): rendered current is null at click time, a stash X exists from an in-flight mount load, and the refresh confirms X is still the newest PENDING row: X must be applied, because comparing against the RENDERED current (null) shows different ids', () => {
+    const stashedFromMount = makeSuggestion({ id: 'mount-pending', status: 'PENDING', createdAt: '2026-09-15T00:00:00.000Z' })
+    const refreshedItems = [stashedFromMount]
+    const renderedCurrentAtClick = null
+
+    const picked = pickAfterFailureRefresh({ current: renderedCurrentAtClick, items: refreshedItems })
+    expect(picked).toBe(stashedFromMount)
+    // Correct comparison (rendered null vs picked's id): different, so the
+    // caller applies it.
+    expect(picked?.id).not.toBe(renderedCurrentAtClick)
+
+    // This is exactly the regression: if the caller compared the re-pick
+    // against the STASH instead of the rendered current, the same suggestion
+    // would look like a no-op (same id) and never get applied, silently
+    // hiding a PENDING suggestion from the screen.
+    const wronglyComparedAgainstStash = pickAfterFailureRefresh({ current: stashedFromMount, items: refreshedItems })
+    expect(wronglyComparedAgainstStash?.id).toBe(stashedFromMount.id)
+  })
+
+  it('Case B: rendered current X, server superseded X with a newer PENDING item Y: returns Y (ids differ, applied)', () => {
+    const renderedCurrentAtClick = makeSuggestion({ id: 'rendered-x', status: 'PENDING', createdAt: '2026-09-15T00:00:00.000Z' })
+    const supersededOnServer = makeSuggestion({ id: 'rendered-x', status: 'SUPERSEDED', createdAt: '2026-09-15T00:00:00.000Z' })
+    const freshPending = makeSuggestion({ id: 'fresh-y', status: 'PENDING', createdAt: '2026-09-16T00:00:00.000Z' })
+
+    const picked = pickAfterFailureRefresh({ current: renderedCurrentAtClick, items: [supersededOnServer, freshPending] })
+    expect(picked).toBe(freshPending)
+    expect(picked?.id).not.toBe(renderedCurrentAtClick.id)
+  })
+
+  it('Case C: rendered current X, refresh still shows X as the newest PENDING row: returns X back unchanged (same id, not applied, draft untouched)', () => {
+    const renderedCurrentAtClick = makeSuggestion({ id: 'rendered-x', status: 'PENDING', createdAt: '2026-09-15T00:00:00.000Z' })
+    const sameFromServer = makeSuggestion({ id: 'rendered-x', status: 'PENDING', createdAt: '2026-09-15T00:00:00.000Z' })
+
+    const picked = pickAfterFailureRefresh({ current: renderedCurrentAtClick, items: [sameFromServer] })
+    expect(picked).toBe(renderedCurrentAtClick)
+    expect(picked?.id).toBe(renderedCurrentAtClick.id)
+  })
+
+  it('Case D: the refresh itself also fails; the stash is applied only when the rendered current was null at click time (pendingToApplyOnActionFailure, reused by handleAskAi instead of an ad hoc check)', () => {
+    const stashedFromMount = makeSuggestion({ id: 'mount-pending', status: 'PENDING' })
+
+    expect(pendingToApplyOnActionFailure({ current: null, stashed: stashedFromMount })).toBe(stashedFromMount)
+
+    const renderedCurrentAtClick = makeSuggestion({ id: 'rendered-x', status: 'PENDING' })
+    expect(pendingToApplyOnActionFailure({ current: renderedCurrentAtClick, stashed: stashedFromMount })).toBeNull()
+  })
+
+  it('401 on Ask AI never reaches the refresh/re-pick step: loginRedirectFor short-circuits the catch block first', () => {
+    const err = new InsightRequestError(401, 'unauthorized')
+    const redirectPath = loginRedirectFor(err, '/leads/clead0001', '')
+    // A real redirect destination means the component's catch block returns
+    // early (redirectOnUnauthorized(err, router) is true) before it ever
+    // refreshes history or calls pickAfterFailureRefresh.
+    expect(redirectPath).toBe('/login?next=%2Fleads%2Fclead0001')
   })
 })
 

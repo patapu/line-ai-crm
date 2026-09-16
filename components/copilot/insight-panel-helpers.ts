@@ -294,22 +294,73 @@ export interface MountLoadPlan {
 }
 
 /**
- * Pure decision for the mount history load's `.then` callback (finding 1 and
- * 2 of the S1 fix pass). `historyRefreshed` gates history/hasLine
- * independently of `current`: a successful refreshHistory always wins there,
- * regardless of any in-flight or committed action. For `current`: a
- * committed action has already established the source of truth, so the
- * mount load must skip it forever; an in-flight action has not yet decided
- * anything, so the mount load stashes its pick instead of applying it
- * (applying now could show a suggestion while phase is still 'requesting',
- * or get clobbered a moment later by that action's own success); otherwise
- * nothing else has ever touched current, so the mount load applies directly.
+ * Pure decision for the mount history load's `.then` callback (finding 1 of
+ * the S1 fix pass, revised by finding 2 of pass 2).
+ *
+ * Truth table (checked in this order, first match wins):
+ * | historyRefreshed | actionCommitted | actionInFlight | applyHistory | current |
+ * |---|---|---|---|---|
+ * | true  | any   | any   | false | 'skip'  |
+ * | false | true  | any   | true  | 'skip'  |
+ * | false | false | true  | true  | 'stash' |
+ * | false | false | false | true  | 'apply' |
+ *
+ * `historyRefreshed` now gates `current` as well as `applyHistory`: a
+ * successful refreshHistory() is newer truth than this slower initial load
+ * for both, so once it has landed the mount load must skip `current` too,
+ * not just history/hasLine, regardless of any in-flight or committed action
+ * (previously `current` only checked actionCommitted/actionInFlight here,
+ * which let a slow mount load that resolved after a successful post-failure
+ * refresh roll `current`/`draft` back to stale data).
+ *
+ * Otherwise: a committed action has already established the source of
+ * truth, so the mount load must skip `current` forever; an in-flight action
+ * has not yet decided anything, so the mount load stashes its pick instead
+ * of applying it (applying now could show a suggestion while phase is still
+ * 'requesting', or get clobbered a moment later by that action's own
+ * success); otherwise nothing else has ever touched current, so the mount
+ * load applies directly.
  */
 export function planMountLoad(snapshot: MountLoadSnapshot): MountLoadPlan {
   const applyHistory = !snapshot.historyRefreshed
-  if (snapshot.actionCommitted) return { applyHistory, current: 'skip' }
+  if (snapshot.historyRefreshed || snapshot.actionCommitted) return { applyHistory, current: 'skip' }
   if (snapshot.actionInFlight) return { applyHistory, current: 'stash' }
   return { applyHistory, current: 'apply' }
+}
+
+/**
+ * Plain snapshot read at the moment the mount history load's fetch rejects.
+ *
+ * A 401 (the only other case the caller's catch block distinguishes) is
+ * never represented here: redirectOnUnauthorized always checks that ahead of
+ * calling planMountLoadFailure and returns early on a real redirect, so this
+ * function never runs for that case at all (removed in the S1 fix pass 2;
+ * the field existed only to document a case this function structurally
+ * never sees).
+ */
+export interface MountLoadFailureSnapshot {
+  /** True while some action's fetch is currently pending. Same meaning as MountLoadSnapshot.actionInFlight. */
+  actionInFlight: boolean
+  /** True once some action has already successfully committed. Same meaning as MountLoadSnapshot.actionCommitted. */
+  actionCommitted: boolean
+}
+
+export interface MountLoadFailurePlan {
+  /** Whether the catch block should show this failure as the panel's load error (setError, setErrorScope('load'), setPhase('error')). */
+  showLoadError: boolean
+}
+
+/**
+ * Pure decision for the mount history load's `.catch` callback (finding 1 of
+ * the S1 fix pass): the initial load failing must never override an
+ * in-flight or already-committed Ask AI / Approve / Reject action with a
+ * load error, since that action either owns the screen right now
+ * ('requesting') or has already established the source of truth for
+ * current/draft/outcome/phase. The load error is only ever worth showing
+ * when no action has touched this mount at all.
+ */
+export function planMountLoadFailure(snapshot: MountLoadFailureSnapshot): MountLoadFailurePlan {
+  return { showLoadError: !snapshot.actionInFlight && !snapshot.actionCommitted }
 }
 
 /**
@@ -326,4 +377,44 @@ export function pendingToApplyOnActionFailure(input: {
 }): SuggestionView | null {
   if (input.current !== null) return null
   return input.stashed
+}
+
+/**
+ * Pure re-pick for the Ask AI failure path, called right after refreshing
+ * history and before applying anything to `current`/`draft` (finding 1 of
+ * the S1 fix pass 2): requestInsight's own write supersedes any prior
+ * PENDING row inside the same transaction it inserts the new one in, so
+ * `input.current` may already be SUPERSEDED server-side by the time this
+ * action fails.
+ *
+ * `input.current` MUST be what the caller's own render actually had on
+ * screen at click time (the `current` state closure), never a stash that
+ * was never rendered: a stash has no on-screen value to protect, and
+ * comparing against it instead of the rendered value can wrongly treat an
+ * already-PENDING re-pick as a no-op, leaving it hidden (pass 1's bug). The
+ * mount load's stash (planMountLoad's 'stash' outcome) is only ever applied
+ * separately, as a last-resort fallback via pendingToApplyOnActionFailure,
+ * when the refresh itself also fails.
+ *
+ * Re-picks the newest PENDING item from the freshly fetched `items`
+ * (equivalent to pickCurrentSuggestion) and compares it against
+ * `input.current`:
+ * - same id: nothing actually changed server-side, so this returns
+ *   `input.current` back unchanged. Callers must compare the result's `id`
+ *   against `input.current`'s `id` (not `!==` reference equality) to detect
+ *   this no-op and skip touching `draft`. The textarea is already disabled
+ *   while an action is in flight, so there is no concurrent edit to protect;
+ *   the point of the no-op is only to keep the draft state from being reset
+ *   back to the (identical) server copy when nothing actually changed.
+ * - different id, or no PENDING item at all (returns null): the previously
+ *   rendered suggestion is stale, so this returns the fresh replacement (or
+ *   null) for the caller to apply to both `current` and `draft`.
+ */
+export function pickAfterFailureRefresh(input: {
+  current: SuggestionView | null
+  items: SuggestionView[]
+}): SuggestionView | null {
+  const picked = pickCurrentSuggestion(input.items)
+  if (input.current && picked && picked.id === input.current.id) return input.current
+  return picked
 }
