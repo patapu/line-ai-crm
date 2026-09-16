@@ -88,3 +88,6 @@ Newest entries go at the top.
   as defence in depth.
 - Pakorn also asked for docs/design.md to match, so its copy of the lead value contract now shows
   the new cap and cents rule, and its package list now names client-only next to server-only.
+- Pakorn then asked for PR #2 to get extra boundary tests (whole cent values near the cap must
+  pass, non cent values below the cap must fail with the multiple of error) and consistent CR-1
+  and CR-2 decision wording, and for PR #2 to be merged after that.
