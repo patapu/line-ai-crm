@@ -25,6 +25,47 @@ Newest entries go at the top.
 
 ## Log
 
+### 2026-09-16, Lane C
+
+**Sample tasks / prompts**
+- Pakorn asked to check whether Lane A had merged into main, then to rebase lane-c-line onto main and force push
+  once it had, then to open a PR into main, and finally to add this log entry.
+- orchestrator planned each step. The main agent checked the Lane A merge with git and gh, did the rebase and
+  resolved its conflicts, committed, force pushed, and opened PR #4. code-explorer read Lane A's CRM code;
+  code-implementer rewrote webhook.db.test.ts and the CR-3 text; code-tester ran the baseline and final
+  gates and the mutation runs; code-reviewer reviewed the change twice; code-doc-writer wrote this entry.
+- orchestrator's first plan for this log entry had two errors (a step that would create a .context folder inside
+  the repo, and a task id without the lane suffix); the main agent sent it back and the revised plan fixed both.
+
+**What the human reviewed or rejected**
+- Pakorn asked twice whether Lane A had merged. The first check found it had not (Lane A's PR #1 was still open);
+  the second check found it had (origin/main was at 58ff6dc).
+- Pakorn approved rebasing lane-c-line onto main and force pushing ("ทำเลย rebase แล้ว force push ได้"). The rebase
+  had conflicts only in docs/contract-change-requests.md and docs/ai-usage-log.md, which the main agent
+  resolved before it force pushed the branch with a lease, from 0dea411 to 0d6452e.
+- Pakorn has not reviewed the Lane C code diff himself in this session. The review came from the code-reviewer
+  agent in two passes: the first found 1 major (a wrong createLead claim in the CR-3 text, see below)
+  and 3 minors, and the second found 0 blocking issues.
+- Pakorn said "เปิด PR เข้า main ได้เลย" and the main agent opened PR #4 (lane-c-line into main) with gh. It has
+  not been merged yet.
+- Pakorn asked for this log entry to be added.
+
+**One change made after human inspection**
+- Because of Pakorn's rebase and force push approval: Lane C's contract change request was renumbered from CR-1 to
+  CR-3, since main already had Lane A's CR-1 and CR-2. The webhook database tests were switched from tx-backed fake
+  CRM functions to Lane A's real findOrCreateContactByLineUserId and findOrOpenLeadForContact, through a partial
+  vi.mock that delegates to the real functions; that switch, together with reading Lane A's merged code, confirmed
+  findOrOpenLeadForContact writes the LEAD_CREATED activity itself, which CR-3 now records under
+  "Current contract".
+- Found by the code-reviewer agent, not by a human: the CR-3 text wrongly claimed CR-3 would close a race between a
+  manual createLead and a webhook delivery, but createLead never calls findOrOpenLeadForContact. The text was
+  corrected to say CR-3 is defence for future callers and does not change createLead.
+- The case 7 rollback test was made meaningful: the real findOrOpenLeadForContact now runs inside the transaction
+  before the forced failure, so the test proves the lead and its LEAD_CREATED activity roll back together.
+- Mutation runs, actually executed by code-tester, checked that the tests catch regressions: removing
+  lockLineUser made the concurrent delivery test (case 9) fail, and removing the forced failure made
+  case 7 fail; both guards were then restored.
+
 ### 2026-09-15, Lane C
 
 **Sample tasks / prompts**
@@ -43,8 +84,6 @@ Newest entries go at the top.
   agent (first pass: 0 critical, 1 major, 8 minor, 9 nit), and the fixes were checked by tests, not by a human.
 - After the agent re-review came back with 0 blocking findings and 3 minor ones, Pakorn read that summary and
   decided the 3 minors had to be fixed before the branch was pushed ("แก้ minor 3 ข้อก่อน แล้วค่อย push").
-- On 2026-09-16, Pakorn checked whether Lane A had merged, then approved rebasing lane-c-line onto the new main
-  and force pushing it ("ทำเลย rebase แล้ว force push ได้").
 
 **One change made after human inspection**
 - Before: the Lane C database tests would have targeted `crm_test`, which did not exist, so they could only fail or
@@ -56,11 +95,6 @@ Newest entries go at the top.
   would still pass with the guard they claimed to cover removed. After: the expiry check runs only after mount
   through `useSyncExternalStore`, and both tests were rewritten so they would fail if their guard were removed
   (confirmed by the code-reviewer agent reasoning through the assertions, not by running the mutated code).
-- Because of Pakorn's rebase and force push approval above: the branch was rebased onto main with Lane A's real
-  CRM code. Lane C's contract change request was renumbered from CR-1 to CR-3, because main already had Lane A's
-  CR-1 and CR-2. The webhook database tests were switched from tx-backed fake CRM functions to Lane A's real
-  functions; that switch, together with reading Lane A's merged code, confirmed that findOrOpenLeadForContact
-  writes the LEAD_CREATED activity itself, which CR-3 now records under "Current contract".
 
 ### 2026-09-15, Lane A
 
