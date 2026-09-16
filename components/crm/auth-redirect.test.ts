@@ -17,11 +17,7 @@ type Router = ReturnType<typeof useRouter>
 type FakeRouter = { replace: ReturnType<typeof vi.fn> }
 
 function stubLocation(pathname: string, search = ''): void {
-  Object.defineProperty(globalThis, 'window', {
-    value: { location: { pathname, search } },
-    configurable: true,
-    writable: true,
-  })
+  vi.stubGlobal('window', { location: { pathname, search } })
 }
 
 function fakeRouter(): FakeRouter & Router {
@@ -33,8 +29,7 @@ function fakeRouter(): FakeRouter & Router {
 
 describe('redirectOnUnauthorized', () => {
   afterEach(() => {
-    // @ts-expect-error -- deleting the test-only stub, not a real global
-    delete globalThis.window
+    vi.unstubAllGlobals()
   })
 
   it('replaces with /login?next=<encoded pathname+search> and returns true on a 401 off /login', () => {

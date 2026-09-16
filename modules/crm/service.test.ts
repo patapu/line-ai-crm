@@ -425,6 +425,20 @@ describe('findTimelinePage (tie-loss at the page boundary)', () => {
     return { id, type: 'NOTE' as const, body: null, meta: null, createdAt: new Date(at), actor: null }
   }
 
+  function messageRow(id: string, at: string) {
+    return {
+      id,
+      channel: 'LINE' as const,
+      direction: 'OUTBOUND' as const,
+      status: 'SENT' as const,
+      body: 'hi',
+      attemptCount: 1,
+      lastError: null,
+      aiSuggestionId: null,
+      createdAt: new Date(at),
+    }
+  }
+
   it('re-fetches and includes every same-timestamp row a saturated source could not fit in its own window', async () => {
     const client = {
       activity: { findMany: vi.fn() },
@@ -492,6 +506,54 @@ describe('findTimelinePage (tie-loss at the page boundary)', () => {
         take: 500,
       }),
     )
+  })
+
+  // Mirrors the activity-source test above, but for the MESSAGE source: the
+  // message table (not the activity table) is the one saturated at
+  // `limit + 1` with its own last row landing exactly on the boundary, so
+  // the message re-fetch (repository.ts findTimelinePage, the MESSAGE-source
+  // branch around :362-371) must fire with the exact `where`, `take` cap and
+  // `orderBy` the ACTIVITY branch already asserts.
+  it('re-fetches the saturated MESSAGE source with an exact-equals createdAt and the 500-row cap', async () => {
+    const client = {
+      activity: { findMany: vi.fn() },
+      message: { findMany: vi.fn() },
+    }
+
+    // First pass: take = limit + 1 = 3. The message table actually has 4
+    // rows tied on `boundary`, but this fetch (ordered desc, capped at 3)
+    // only captures 3 rows total, 2 of which are at the boundary.
+    client.activity.findMany.mockResolvedValueOnce([])
+    client.message.findMany.mockResolvedValueOnce([
+      messageRow('m1', newer),
+      messageRow('m2', boundary),
+      messageRow('m3', boundary),
+    ])
+
+    // Second pass: the extra fetch at exactly the boundary timestamp, which
+    // returns the real full set of tied rows, including m4 (missed above).
+    client.message.findMany.mockResolvedValueOnce([
+      messageRow('m2', boundary),
+      messageRow('m3', boundary),
+      messageRow('m4', boundary),
+    ])
+
+    const page = await findTimelinePage(client as unknown as Tx, leadId, { limit: 2 })
+
+    expect(client.activity.findMany).toHaveBeenCalledTimes(1)
+    expect(client.message.findMany).toHaveBeenCalledTimes(2)
+    expect(client.message.findMany).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: { leadId, createdAt: new Date(boundary) },
+        orderBy: [{ id: 'desc' }],
+        take: 500,
+      }),
+    )
+    expect(page.nextCursor).toBe(boundary)
+    const ids = page.items.map((item) => item.id)
+    expect(ids.sort()).toEqual(['m1', 'm2', 'm3', 'm4'])
+    expect(new Set(ids).size).toBe(ids.length)
   })
 
   it('does not re-fetch when no source is saturated exactly at the boundary', async () => {

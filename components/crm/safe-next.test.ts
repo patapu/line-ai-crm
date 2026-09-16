@@ -97,7 +97,7 @@ describe('safeNext', () => {
   // A double-dot segment spelled with percent-encoded dots (%2E is the
   // WHATWG URL spec's own case-insensitive alias for a literal '.' when
   // detecting dot segments) still resolves protocol-relative, same as the
-  // literal '/../ /evil.com' case above.
+  // literal '/..//evil.com' case above.
   it('falls back to / for a percent-encoded double-dot segment that resolves protocol-relative', () => {
     expect(safeNext('/%2E%2E//evil.com')).toBe('/')
   })

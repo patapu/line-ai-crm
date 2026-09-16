@@ -1,5 +1,3 @@
-'use client'
-
 // OWNER: lane A
 //
 // Shared client-side helper for the "session expired mid-mutation" case:

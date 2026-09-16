@@ -66,3 +66,8 @@ Newest entries go at the top.
   `//` or `/\`, so `/login?next=/%09/evil.com` and `/login?next=/.//evil.com` could still send a user
   off-site. It now rejects control characters and backslashes, resolves the value against a dummy
   origin, requires the same origin, and rejects a resolved path that starts with `//`.
+- Pakorn then asked for the five remaining review nits to be fixed as well. They were: a wrong
+  comment about what vitest restores between tests, a missing test for the message side of the
+  timeline tie re-fetch, a comment typo, an unneeded `use client` directive, and a hand written
+  window stub in a test. All five are fixed, and the gates were run again: 85 tests passing, lint
+  with no errors, typecheck and build passing.

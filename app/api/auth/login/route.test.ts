@@ -50,12 +50,14 @@ describe('POST /api/auth/login', () => {
   })
 
   // Without this, each test's `vi.spyOn(console, ...)` above wraps whatever
-  // the previous test left behind instead of the real console method, and
-  // the mocks module-mocked at the top of this file (getDb, verifyPassword,
-  // verifyPasswordDummy) would carry stale `.mockResolvedValueOnce` queues
-  // into the next test. `failuresByIpEmail`/`failuresByEmail` themselves are
-  // plain module-level Maps with no test hook to reset, so every test in
-  // this file (old and new) is written to use its own email address that no
+  // the previous test left behind instead of the real console method.
+  // (The `mockReset()` calls in `beforeEach` above are what clear any
+  // stale `.mockResolvedValueOnce` queue on the module-mocked getDb,
+  // verifyPassword, and verifyPasswordDummy; `vi.restoreAllMocks()` only
+  // restores `vi.spyOn` spies, so it does not touch those queues.)
+  // `failuresByIpEmail`/`failuresByEmail` themselves are plain
+  // module-level Maps with no test hook to reset, so every test in this
+  // file (old and new) is written to use its own email address that no
   // other test touches, rather than relying on module isolation.
   afterEach(() => {
     vi.restoreAllMocks()
