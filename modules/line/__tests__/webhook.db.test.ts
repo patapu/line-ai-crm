@@ -1,7 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto'
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
-import type { Tx } from '@/lib/db'
 import { getDb } from '@/lib/db'
 import { DomainError } from '@/lib/errors'
 import { encrypt, SESSION_COOKIE_NAME } from '@/lib/auth/session'
@@ -9,41 +8,42 @@ import { MockLineClient } from '@/modules/line/client.mock'
 import { backfillContactProfile } from '@/modules/line/webhook'
 
 // [C-tester] modules/line/__tests__/webhook.db.test.ts: real Postgres
-// (crm_test, per vitest.setup.ts). Lane A's findOrCreateContactByLineUserId /
-// findOrOpenLeadForContact still throw 'not implemented' (CR-1 pending), so
-// this file mocks them with tx-backed fakes that mirror the intended
-// contract, per plan-S4.md step 21.
+// (crm_test, per vitest.setup.ts). These tests run against Lane A's real
+// CRM functions (modules/crm/service.ts): findOrCreateContactByLineUserId
+// and findOrOpenLeadForContact are mocked only as thin vi.fn() wrappers
+// around the real implementations, so every case runs the real code by
+// default. Cases 7, 8 and 9 override one call at a time with
+// mockImplementationOnce to force a failure or to prove the advisory lock.
+// The advisory lock request is CR-3 (docs/contract-change-requests.md),
+// still OPEN.
 
 const OWNER_EMAIL = `lanec-owner-${randomBytes(6).toString('hex')}@crm.test`
 const PREV_LINE_INBOUND_OWNER_EMAIL = process.env.LINE_INBOUND_OWNER_EMAIL
 process.env.LINE_INBOUND_OWNER_EMAIL = OWNER_EMAIL
 
-vi.mock('@/modules/crm/service', () => ({
-  findOrCreateContactByLineUserId: vi.fn(async (tx: Tx, input: { lineUserId: string; displayName?: string | null }) => {
-    const existing = await tx.contact.findUnique({ where: { lineUserId: input.lineUserId } })
-    if (existing) return { contact: existing, created: false }
-    const contact = await tx.contact.create({
-      data: { firstName: 'LINE user', lineUserId: input.lineUserId, source: 'LINE' },
-    })
-    return { contact, created: true }
-  }),
-  findOrOpenLeadForContact: vi.fn(
-    async (tx: Tx, input: { contactId: string; ownerId: string; source: 'WEBSITE' | 'MANUAL' | 'LINE' }) => {
-      const existing = await tx.lead.findFirst({
-        where: { contactId: input.contactId, stage: { notIn: ['WON', 'LOST'] } },
-        orderBy: { createdAt: 'desc' },
-      })
-      if (existing) return { lead: existing, created: false }
-      const lead = await tx.lead.create({
-        data: { title: 'LINE inquiry', contactId: input.contactId, ownerId: input.ownerId, source: input.source },
-      })
-      return { lead, created: true }
-    },
-  ),
-}))
+vi.mock('@/modules/crm/service', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/modules/crm/service')>()
+  return {
+    ...actual,
+    findOrCreateContactByLineUserId: vi.fn(actual.findOrCreateContactByLineUserId),
+    findOrOpenLeadForContact: vi.fn(actual.findOrOpenLeadForContact),
+  }
+})
 
 const { handleLineWebhook } = await import('@/modules/line/service')
 const { findOrCreateContactByLineUserId, findOrOpenLeadForContact } = await import('@/modules/crm/service')
+const actualCrmService = await vi.importActual<typeof import('@/modules/crm/service')>('@/modules/crm/service')
+
+// Safety net: even though every case that queues a mockImplementationOnce
+// consumes it before the test ends, this guarantees no queued override and
+// no stale call history can leak from one case into the next, and that the
+// mocks always fall back to the real CRM functions.
+afterEach(() => {
+  vi.mocked(findOrCreateContactByLineUserId).mockReset()
+  vi.mocked(findOrCreateContactByLineUserId).mockImplementation(actualCrmService.findOrCreateContactByLineUserId)
+  vi.mocked(findOrOpenLeadForContact).mockReset()
+  vi.mocked(findOrOpenLeadForContact).mockImplementation(actualCrmService.findOrOpenLeadForContact)
+})
 
 const db = getDb()
 const SECRET = 'webhook-db-test-secret'
@@ -186,7 +186,7 @@ describe('cases 1-3: a valid text event, then dedupe by webhookEventId, then ded
   const messageId = randomUUID()
   const text = 'hello from a synthetic LINE user'
 
-  it('case 1: a valid text event creates contact, lead, message, and an activity', async () => {
+  it('case 1: a valid text event creates contact, lead, message, and both activities', async () => {
     const outcome = await callWebhook([messageEvent({ lineUserId, text, messageId, webhookEventId })])
     expect(outcome).toEqual({ status: 200, processed: 1, duplicates: 0, ignored: 0, failed: 0 })
 
@@ -196,10 +196,14 @@ describe('cases 1-3: a valid text event, then dedupe by webhookEventId, then ded
 
     const contact = await db.contact.findUnique({ where: { lineUserId } })
     expect(contact).not.toBeNull()
+    expect(contact?.firstName).toBe('LINE user')
     expect(contact?.source).toBe('LINE')
+    expect(contact?.lineDisplayName).toBeNull()
 
     const lead = await db.lead.findFirst({ where: { contactId: contact!.id } })
     expect(lead).not.toBeNull()
+    expect(lead?.title).toBe('LINE: LINE user')
+    expect(lead?.stage).toBe('NEW')
     expect(lead?.ownerId).toBe(adminId)
     expect(lead?.source).toBe('LINE')
 
@@ -213,18 +217,31 @@ describe('cases 1-3: a valid text event, then dedupe by webhookEventId, then ded
     })
     expect(message?.webhookEventId).toBe(row!.id)
 
-    const activity = await db.activity.findFirst({
+    const contactActivity = await db.activity.findFirst({
       where: { leadId: lead!.id, type: 'CONTACT_CREATED_FROM_LINE' },
     })
-    expect(activity).not.toBeNull()
-    expect(activity?.actorId).toBeNull()
+    expect(contactActivity).not.toBeNull()
+    expect(contactActivity?.actorId).toBeNull()
+
+    // findOrOpenLeadForContact (Lane A's real code) writes its own
+    // LEAD_CREATED activity when it opens a lead: exactly one, next to
+    // CONTACT_CREATED_FROM_LINE.
+    const leadCreatedActivities = await db.activity.findMany({
+      where: { leadId: lead!.id, type: 'LEAD_CREATED' },
+    })
+    expect(leadCreatedActivities).toHaveLength(1)
+    expect(leadCreatedActivities[0]?.actorId).toBeNull()
   })
 
   it('case 2: the same body delivered again is a webhookEventId duplicate, no new rows', async () => {
+    const contact = await db.contact.findUniqueOrThrow({ where: { lineUserId } })
+    const lead = await db.lead.findFirstOrThrow({ where: { contactId: contact.id } })
+
     const before = {
       webhookEvents: await db.webhookEvent.count({ where: { webhookEventId } }),
       contacts: await db.contact.count({ where: { lineUserId } }),
       messages: await db.message.count({ where: { lineMessageId: messageId } }),
+      leadCreatedActivities: await db.activity.count({ where: { leadId: lead.id, type: 'LEAD_CREATED' } }),
     }
 
     const outcome = await callWebhook([messageEvent({ lineUserId, text, messageId, webhookEventId })])
@@ -233,6 +250,9 @@ describe('cases 1-3: a valid text event, then dedupe by webhookEventId, then ded
     expect(await db.webhookEvent.count({ where: { webhookEventId } })).toBe(before.webhookEvents)
     expect(await db.contact.count({ where: { lineUserId } })).toBe(before.contacts)
     expect(await db.message.count({ where: { lineMessageId: messageId } })).toBe(before.messages)
+    expect(await db.activity.count({ where: { leadId: lead.id, type: 'LEAD_CREATED' } })).toBe(
+      before.leadCreatedActivities,
+    )
   })
 
   it('case 3: a new webhookEventId with the same message.id is a lineMessageId duplicate, no new message', async () => {
@@ -294,14 +314,27 @@ describe('case 6: unfollow, a sticker, and text with no userId are all ignored',
 })
 
 describe('case 7: a transaction failure rolls back, is recorded FAILED, and reprocesses cleanly on redelivery', () => {
-  it('rolls back the contact, marks the row FAILED without leaking the message text, then succeeds on redelivery', async () => {
+  it('rolls back the whole tx, including a real lead open, then reprocesses cleanly on redelivery', async () => {
     const lineUserId = newLineUserId()
     const webhookEventId = newWebhookEventId()
     const messageId = randomUUID()
     const secretText = 'do-not-leak-this-inbound-text'
 
-    vi.mocked(findOrOpenLeadForContact).mockImplementationOnce(() => {
-      throw new DomainError('INTERNAL', 'forced-failure-case7')
+    // The override runs the REAL findOrOpenLeadForContact first (so it
+    // actually inserts a Lead and writes LEAD_CREATED inside the same tx as
+    // the contact insert), then throws. That makes the assertions below a
+    // real proof of rollback: if only the contact insert had happened (as a
+    // throw-before-real-call override would give us), checking that the
+    // lead and its activity never landed would be vacuous. With the real
+    // call run first, the lead and LEAD_CREATED did exist mid-transaction,
+    // and the assertions confirm the throw discarded them along with the
+    // contact when the whole tx aborted.
+    const real = actualCrmService.findOrOpenLeadForContact
+    let openedLeadId: string | undefined
+    vi.mocked(findOrOpenLeadForContact).mockImplementationOnce(async (tx, input) => {
+      const result = await real(tx, input)
+      openedLeadId = result.lead.id
+      throw new DomainError('INTERNAL', 'forced-failure-case7-after-real-lead-open')
     })
 
     const outcome = await callWebhook([messageEvent({ lineUserId, text: secretText, messageId, webhookEventId })])
@@ -312,11 +345,23 @@ describe('case 7: a transaction failure rolls back, is recorded FAILED, and repr
     expect(row?.error).not.toBeNull()
     expect(row?.error).not.toContain(secretText)
 
+    // openedLeadId proves the real lead insert (and its LEAD_CREATED write)
+    // happened mid-transaction; none of it, nor the contact, survives the
+    // rollback.
+    expect(openedLeadId).toBeDefined()
     expect(await db.contact.count({ where: { lineUserId } })).toBe(0)
+    expect(await db.lead.findUnique({ where: { id: openedLeadId! } })).toBeNull()
+    expect(await db.activity.count({ where: { leadId: openedLeadId! } })).toBe(0)
 
     const redelivered = await callWebhook([messageEvent({ lineUserId, text: secretText, messageId, webhookEventId })])
     expect(redelivered).toEqual({ status: 200, processed: 1, duplicates: 0, ignored: 0, failed: 0 })
+
+    const contact = await db.contact.findUniqueOrThrow({ where: { lineUserId } })
+    expect(await db.contact.count({ where: { lineUserId } })).toBe(1)
+    const lead = await db.lead.findFirstOrThrow({ where: { contactId: contact.id } })
+    expect(await db.lead.count({ where: { contactId: contact.id } })).toBe(1)
     expect(await db.message.count({ where: { lineMessageId: messageId } })).toBe(1)
+    expect(await db.activity.count({ where: { leadId: lead.id, type: 'LEAD_CREATED' } })).toBe(1)
   })
 })
 
@@ -348,13 +393,16 @@ describe('case 8: a mixed batch of one failing and one good event, then redelive
 })
 
 describe('case 9: concurrent deliveries for one new user prove the advisory lock', () => {
-  it('blocks the second delivery from entering findOrCreateContactByLineUserId until the first releases its barrier, then gives exactly 1 contact, 1 lead, and 2 messages', async () => {
+  it('blocks the second delivery until the first releases the barrier, then settles to one contact and one lead', async () => {
+    // See assertions below for the exact expected counts: 1 contact, 1 lead,
+    // 2 messages, and 1 LEAD_CREATED activity once both deliveries finish.
     const lineUserId = newLineUserId()
     const eventA = messageEvent({ lineUserId, text: 'concurrent A' })
     const eventB = messageEvent({ lineUserId, text: 'concurrent B' })
 
-    const baseImpl = vi.mocked(findOrCreateContactByLineUserId).getMockImplementation()
-    if (!baseImpl) throw new Error('test setup error: no base mock implementation found')
+    // The real implementation, captured once, so the barrier can delegate to
+    // it after release instead of returning a canned result.
+    const real = actualCrmService.findOrCreateContactByLineUserId
     vi.mocked(findOrCreateContactByLineUserId).mockClear()
 
     let releaseBarrier!: () => void
@@ -370,11 +418,14 @@ describe('case 9: concurrent deliveries for one new user prove the advisory lock
     // delivery wins the pg advisory lock) parks on the barrier. Because the
     // lock is held for the whole transaction, the second delivery cannot
     // reach findOrCreateContactByLineUserId at all until the barrier is
-    // released and the first transaction commits (releasing the lock).
+    // released and the first transaction commits (releasing the lock). If
+    // lockLineUser were removed from modules/line/webhook.ts, the second
+    // delivery would reach this mock immediately, and the call count check
+    // below (still 1, not 2) would fail.
     vi.mocked(findOrCreateContactByLineUserId).mockImplementationOnce(async (tx, input) => {
       firstEnteredResolve()
       await barrier
-      return baseImpl(tx, input)
+      return real(tx, input)
     })
 
     const promiseA = callWebhook([eventA])
@@ -396,8 +447,10 @@ describe('case 9: concurrent deliveries for one new user prove the advisory lock
 
     expect(await db.contact.count({ where: { lineUserId } })).toBe(1)
     const contact = await db.contact.findUniqueOrThrow({ where: { lineUserId } })
+    const lead = await db.lead.findFirstOrThrow({ where: { contactId: contact.id } })
     expect(await db.lead.count({ where: { contactId: contact.id } })).toBe(1)
     expect(await db.message.count({ where: { contactId: contact.id } })).toBe(2)
+    expect(await db.activity.count({ where: { leadId: lead.id, type: 'LEAD_CREATED' } })).toBe(1)
   })
 })
 
