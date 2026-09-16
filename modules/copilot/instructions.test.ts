@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { PROMPT_VERSION, instructionsPath, loadInstructions } from '@/modules/copilot/instructions'
 
-// [D] modules/copilot/instructions.test.ts (G4). No DB, no network. See
+// [B] modules/copilot/instructions.test.ts (G4). No DB, no network. See
 // S4-plan.md section G4.
 
 describe('instructionsPath', () => {

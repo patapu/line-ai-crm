@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Db } from '@/lib/db'
 import type { Actor } from '@/lib/auth/dal'
 
-// [D] modules/copilot/service.test.ts (G6). No DB: every call passes a fake
+// [B] modules/copilot/service.test.ts (G6). No DB: every call passes a fake
 // `db`/`tx` in `deps`, and '@/modules/line/service' + '@/modules/copilot/model'
 // are mocked so no real network or env-dependent construction happens. See
 // S4-plan.md section G6 and section C.

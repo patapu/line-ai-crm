@@ -11,7 +11,7 @@ import {
 } from '@/modules/copilot/context'
 import type { LeadContext } from '@/modules/copilot/types'
 
-// [D] modules/copilot/context.test.ts (G3). No DB, no network. See
+// [B] modules/copilot/context.test.ts (G3). No DB, no network. See
 // docs/design.md section 4 and S4-plan.md section G3.
 
 describe('module constants', () => {
@@ -242,5 +242,91 @@ describe('buildLeadContext', () => {
     expect(ctx?.contact.hasLine).toBe(true)
     expect(ctx?.contact.companyName).toBe('Contact Co')
     expect(ctx?.contact.tags).toEqual(['vip'])
+  })
+})
+
+describe('buildLeadContext: STAGE_CHANGED / OWNER_CHANGED activity text from meta', () => {
+  async function ctxFor(activity: Record<string, unknown>) {
+    const fakeLead = baseLeadRow({
+      activities: [{ createdAt: new Date('2026-09-10T00:00:00Z'), ...activity }],
+    })
+    const db = { lead: { findUnique: vi.fn().mockResolvedValue(fakeLead) } } as unknown as Db
+    return buildLeadContext(db, { leadId: fakeLead.id })
+  }
+
+  it('derives text from {from, to, reason} meta when body is empty', async () => {
+    const ctx = await ctxFor({
+      type: 'STAGE_CHANGED',
+      body: null,
+      meta: { from: 'NEW', to: 'LOST', reason: 'budget' },
+    })
+    const text = ctx?.recentActivities[0]?.text
+    expect(text).toContain('NEW')
+    expect(text).toContain('LOST')
+    expect(text).toContain('budget')
+  })
+
+  it('trims a reason with surrounding whitespace so the suffix has no extra spaces (S3 round 2)', async () => {
+    const ctx = await ctxFor({
+      type: 'STAGE_CHANGED',
+      body: null,
+      meta: { from: 'NEW', to: 'LOST', reason: '  budget  ' },
+    })
+    expect(ctx?.recentActivities[0]?.text).toBe('NEW -> LOST (budget)')
+  })
+
+  it('omits the reason suffix when reason is absent', async () => {
+    const ctx = await ctxFor({
+      type: 'STAGE_CHANGED',
+      body: null,
+      meta: { from: 'NEW', to: 'LOST' },
+    })
+    expect(ctx?.recentActivities[0]?.text).toBe('NEW -> LOST')
+  })
+
+  it('prefers an existing body over deriving text from meta', async () => {
+    const ctx = await ctxFor({
+      type: 'STAGE_CHANGED',
+      body: 'Custom note from a user',
+      meta: { from: 'NEW', to: 'LOST', reason: 'budget' },
+    })
+    expect(ctx?.recentActivities[0]?.text).toBe('Custom note from a user')
+  })
+
+  it.each([
+    ['null meta', null],
+    ['a string meta (wrong shape)', 'not an object'],
+    ['meta missing from/to', { reason: 'budget' }],
+  ])('falls back to the plain body/null behaviour for %s', async (_label, meta) => {
+    const ctx = await ctxFor({ type: 'STAGE_CHANGED', body: null, meta })
+    expect(ctx?.recentActivities[0]?.text).toBeNull()
+  })
+
+  it('truncates a very long reason so the derived text stays at or under 500 characters', async () => {
+    const longReason = 'x'.repeat(600)
+    const ctx = await ctxFor({
+      type: 'STAGE_CHANGED',
+      body: null,
+      meta: { from: 'NEW', to: 'LOST', reason: longReason },
+    })
+    const text = ctx?.recentActivities[0]?.text
+    expect(text).not.toBeNull()
+    expect((text as string).length).toBeLessThanOrEqual(500)
+    expect((text as string).endsWith('…')).toBe(true)
+  })
+
+  it('an OWNER_CHANGED activity never derives text from meta, and no user id leaks into renderLeadContext output', async () => {
+    const fromId = 'cuser00000000000000000001'
+    const toId = 'cuser00000000000000000002'
+    const ctx = await ctxFor({
+      type: 'OWNER_CHANGED',
+      body: null,
+      meta: { from: fromId, to: toId },
+    })
+    expect(ctx?.recentActivities[0]?.text).toBeNull()
+
+    const rendered = renderLeadContext(ctx as LeadContext)
+    expect(rendered).not.toContain(fromId)
+    expect(rendered).not.toContain(toId)
   })
 })

@@ -1,6 +1,6 @@
 import type { LeadContext } from '@/modules/copilot/types'
 
-// [A1] modules/copilot/guardrails.ts: lane owned, pure. See docs/design.md
+// [B] modules/copilot/guardrails.ts: lane owned, pure. See docs/design.md
 // section 4 ("Guardrails"). Must NOT import ./fallback (fallback imports
 // this module, not the other way round).
 //

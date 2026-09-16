@@ -1,4 +1,5 @@
 import type { Db, Tx } from '@/lib/db'
+import type { Prisma } from '@/lib/generated/prisma/client'
 import type { LeadContext } from '@/modules/copilot/types'
 
 // [B3] modules/copilot/context.ts: lane owned. See docs/design.md section 4
@@ -24,6 +25,22 @@ export function truncateText(text: string): string {
   if (beforeCut >= 0xd800 && beforeCut <= 0xdbff) cut -= 1
 
   return text.slice(0, cut) + '…'
+}
+
+/**
+ * Narrows a `STAGE_CHANGED` activity's `meta` Json column (written by
+ * modules/crm/service.ts changeStage as `{from, to, reason}`, see
+ * schema.prisma's Activity.meta doc comment) into a typed shape, with no
+ * `any`. Returns null for anything that does not match: an older row from
+ * before this shape existed, a differently-shaped value, or a non-string
+ * `reason` other than null/undefined.
+ */
+function parseStageChangeMeta(meta: Prisma.JsonValue | null): { from: string; to: string; reason: string | null } | null {
+  if (meta === null || typeof meta !== 'object' || Array.isArray(meta)) return null
+  const { from, to, reason } = meta as { from?: unknown; to?: unknown; reason?: unknown }
+  if (typeof from !== 'string' || typeof to !== 'string') return null
+  if (reason !== null && reason !== undefined && typeof reason !== 'string') return null
+  return { from, to, reason: typeof reason === 'string' ? reason : null }
 }
 
 /**
@@ -84,7 +101,7 @@ export async function buildLeadContext(
         where: { type: { notIn: ['AI_SUGGESTION_CREATED', 'AI_SUGGESTION_APPROVED', 'AI_SUGGESTION_REJECTED'] } },
         orderBy: { createdAt: 'desc' },
         take: MAX_CONTEXT_ACTIVITIES,
-        select: { createdAt: true, type: true, body: true },
+        select: { createdAt: true, type: true, body: true, meta: true },
       },
     },
   })
@@ -103,11 +120,29 @@ export async function buildLeadContext(
     .reverse()
 
   const recentActivities = lead.activities
-    .map((activity) => ({
-      at: activity.createdAt.toISOString(),
-      type: activity.type,
-      text: activity.body !== null ? truncateText(activity.body) : null,
-    }))
+    .map((activity) => {
+      // STAGE_CHANGED never gets a `body` (modules/crm/service.ts changeStage
+      // writes it as {from,to,reason} meta only): derive a text summary from
+      // that meta so the model still sees the transition, without ever
+      // surfacing OWNER_CHANGED or any other type's meta as text.
+      if (!activity.body && activity.type === 'STAGE_CHANGED') {
+        const stageChange = parseStageChangeMeta(activity.meta)
+        if (stageChange) {
+          const trimmedReason = stageChange.reason !== null ? stageChange.reason.trim() : ''
+          const reasonSuffix = trimmedReason !== '' ? ` (${trimmedReason})` : ''
+          return {
+            at: activity.createdAt.toISOString(),
+            type: activity.type,
+            text: truncateText(`${stageChange.from} -> ${stageChange.to}${reasonSuffix}`),
+          }
+        }
+      }
+      return {
+        at: activity.createdAt.toISOString(),
+        type: activity.type,
+        text: activity.body !== null ? truncateText(activity.body) : null,
+      }
+    })
     .reverse()
 
   return {

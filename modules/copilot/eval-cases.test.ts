@@ -9,7 +9,7 @@ import {
 } from '@/scripts/eval-copilot'
 import type { CopilotResult } from '@/modules/copilot/types'
 
-// [D] modules/copilot/eval-cases.test.ts (G8). Importing scripts/eval-copilot.ts
+// [B] modules/copilot/eval-cases.test.ts (G8). Importing scripts/eval-copilot.ts
 // for its exports has no side effects: main() only runs when this file is the
 // process entry point, which it never is under vitest. See S4-plan.md
 // section G8 and section F.4.

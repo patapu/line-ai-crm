@@ -1,20 +1,37 @@
 import { describe, expect, it } from 'vitest'
 import type { SuggestionView } from '@/modules/copilot/service'
 import {
+  BADGE_FALLBACK,
+  BADGE_GUARDRAIL,
+  BADGE_LOW_CONFIDENCE,
+  DRAFT_MAX,
+  ERROR_CONFLICT,
+  ERROR_FORBIDDEN,
+  ERROR_GENERIC,
+  InsightRequestError,
+  MESSAGE_STATUS_TEXT,
   NBA_LABELS,
   PENDING_LABEL,
+  SUGGESTION_SOURCE_LABEL,
+  SUGGESTION_STATUS_LABEL,
+  SUGGESTION_STATUS_TONE,
   buildApprovePayload,
+  buildLoginRedirect,
   canSubmitApprove,
   canSubmitReject,
   describeApiError,
+  formatDraftCount,
   formatDue,
+  formatHistoryScore,
+  getSuggestionBadgeItems,
   getSuggestionBadges,
   isDraftEdited,
+  loginRedirectFor,
   pickCurrentSuggestion,
   requireBody,
 } from '@/components/copilot/insight-panel-helpers'
 
-// [E] components/copilot/insight-panel-helpers.test.ts (G8). Pure functions,
+// [B] components/copilot/insight-panel-helpers.test.ts (G8). Pure functions,
 // no React, no DOM tooling. `SuggestionView` is imported as a type only, so
 // this file never actually loads modules/copilot/service.ts at runtime. See
 // S4-plan.md section G8.
@@ -47,7 +64,7 @@ function makeSuggestion(overrides: Partial<SuggestionView> = {}): SuggestionView
 
 describe('constants', () => {
   it('PENDING_LABEL is the fixed panel copy', () => {
-    expect(PENDING_LABEL).toBe('AI suggestion, not yet saved to the lead')
+    expect(PENDING_LABEL).toBe('คำแนะนำจาก AI ยังไม่ถูกบันทึกลง lead จนกว่าคุณจะอนุมัติ')
   })
 
   it('NBA_LABELS covers every next-best-action type', () => {
@@ -74,22 +91,22 @@ describe('getSuggestionBadges', () => {
   })
 
   it('badges a FALLBACK source', () => {
-    expect(getSuggestionBadges(makeSuggestion({ source: 'FALLBACK' }))).toContain('Fallback (rule-based)')
+    expect(getSuggestionBadges(makeSuggestion({ source: 'FALLBACK' }))).toContain(BADGE_FALLBACK)
   })
 
   it('badges lowConfidence', () => {
-    expect(getSuggestionBadges(makeSuggestion({ lowConfidence: true }))).toContain('Low confidence')
+    expect(getSuggestionBadges(makeSuggestion({ lowConfidence: true }))).toContain(BADGE_LOW_CONFIDENCE)
   })
 
   it('badges a GUARDRAIL_BLOCKED errorCode', () => {
-    expect(getSuggestionBadges(makeSuggestion({ errorCode: 'GUARDRAIL_BLOCKED' }))).toContain('Draft replaced by guardrail')
+    expect(getSuggestionBadges(makeSuggestion({ errorCode: 'GUARDRAIL_BLOCKED' }))).toContain(BADGE_GUARDRAIL)
   })
 
   it('can combine all three badges', () => {
     const badges = getSuggestionBadges(
       makeSuggestion({ source: 'FALLBACK', lowConfidence: true, errorCode: 'GUARDRAIL_BLOCKED' }),
     )
-    expect(badges).toEqual(['Fallback (rule-based)', 'Low confidence', 'Draft replaced by guardrail'])
+    expect(badges).toEqual([BADGE_FALLBACK, BADGE_LOW_CONFIDENCE, BADGE_GUARDRAIL])
   })
 })
 
@@ -212,9 +229,12 @@ describe('canSubmitReject (S11 fix pass 1)', () => {
 
 describe('describeApiError', () => {
   it('gives a specific hint on 409', () => {
-    expect(describeApiError(409, { error: { message: 'ignored' } })).toBe(
-      'This suggestion was already decided or replaced. Refresh to see the latest.',
-    )
+    expect(describeApiError(409, { error: { message: 'ignored' } })).toBe(ERROR_CONFLICT)
+  })
+
+  it('gives a specific hint on 403, ignoring any server message', () => {
+    expect(describeApiError(403, { error: { message: 'ignored' } })).toBe(ERROR_FORBIDDEN)
+    expect(describeApiError(403, null)).toBe(ERROR_FORBIDDEN)
   })
 
   it('uses the server message for other statuses', () => {
@@ -222,26 +242,167 @@ describe('describeApiError', () => {
   })
 
   it('falls back to a generic message when the body has no error message', () => {
-    expect(describeApiError(500, null)).toBe('Something went wrong')
-    expect(describeApiError(400, {})).toBe('Something went wrong')
+    expect(describeApiError(500, null)).toBe(ERROR_GENERIC)
+    expect(describeApiError(400, {})).toBe(ERROR_GENERIC)
+  })
+})
+
+describe('buildLoginRedirect', () => {
+  it('encodes pathname and search the same way as components/crm/auth-redirect.ts', () => {
+    expect(buildLoginRedirect('/leads/clead0001', '')).toBe('/login?next=%2Fleads%2Fclead0001')
+  })
+
+  it('includes and encodes the search string when present', () => {
+    expect(buildLoginRedirect('/leads/clead0001', '?tab=notes&x=1')).toBe(
+      `/login?next=${encodeURIComponent('/leads/clead0001?tab=notes&x=1')}`,
+    )
+  })
+
+  it('returns null when already on /login, so a 401 there never loops', () => {
+    expect(buildLoginRedirect('/login', '')).toBeNull()
+    expect(buildLoginRedirect('/login', '?next=%2Fleads')).toBeNull()
+  })
+})
+
+describe('loginRedirectFor (S3 round 2)', () => {
+  it('returns the login path for an InsightRequestError with status 401', () => {
+    const err = new InsightRequestError(401, 'unauthorized')
+    expect(loginRedirectFor(err, '/leads/clead0001', '')).toBe('/login?next=%2Fleads%2Fclead0001')
+  })
+
+  it.each([403, 409, 500])('returns null for an InsightRequestError with status %d', (status) => {
+    const err = new InsightRequestError(status, 'nope')
+    expect(loginRedirectFor(err, '/leads/clead0001', '')).toBeNull()
+  })
+
+  it('returns null for a plain Error', () => {
+    expect(loginRedirectFor(new Error('boom'), '/leads/clead0001', '')).toBeNull()
+  })
+
+  it('returns null for a non-error value', () => {
+    expect(loginRedirectFor('not an error', '/leads/clead0001', '')).toBeNull()
+    expect(loginRedirectFor(null, '/leads/clead0001', '')).toBeNull()
+    expect(loginRedirectFor(undefined, '/leads/clead0001', '')).toBeNull()
+  })
+
+  it('returns null when pathname is /login, even for a 401', () => {
+    const err = new InsightRequestError(401, 'unauthorized')
+    expect(loginRedirectFor(err, '/login', '')).toBeNull()
+  })
+})
+
+describe('InsightRequestError', () => {
+  it('carries status and message, and is an instanceof Error', () => {
+    const err = new InsightRequestError(409, ERROR_CONFLICT)
+    expect(err).toBeInstanceOf(Error)
+    expect(err).toBeInstanceOf(InsightRequestError)
+    expect(err.status).toBe(409)
+    expect(err.message).toBe(ERROR_CONFLICT)
+    expect(err.name).toBe('InsightRequestError')
+  })
+})
+
+describe('formatDraftCount', () => {
+  it('formats a count against DRAFT_MAX', () => {
+    expect(formatDraftCount(0)).toBe(`0/${DRAFT_MAX} ตัวอักษร`)
+    expect(formatDraftCount(42)).toBe(`42/${DRAFT_MAX} ตัวอักษร`)
+    expect(formatDraftCount(DRAFT_MAX)).toBe(`${DRAFT_MAX}/${DRAFT_MAX} ตัวอักษร`)
+  })
+})
+
+describe('formatHistoryScore', () => {
+  it('formats a score', () => {
+    expect(formatHistoryScore(0)).toBe('คะแนน 0')
+    expect(formatHistoryScore(70)).toBe('คะแนน 70')
+  })
+})
+
+describe('getSuggestionBadgeItems', () => {
+  it('returns an empty array for a confident MODEL suggestion with no error', () => {
+    expect(getSuggestionBadgeItems(makeSuggestion())).toEqual([])
+  })
+
+  it('always orders items FALLBACK, then LOW_CONFIDENCE, then GUARDRAIL_BLOCKED, regardless of which combination is present', () => {
+    const all = getSuggestionBadgeItems(
+      makeSuggestion({ source: 'FALLBACK', lowConfidence: true, errorCode: 'GUARDRAIL_BLOCKED' }),
+    )
+    expect(all.map((item) => item.id)).toEqual(['FALLBACK', 'LOW_CONFIDENCE', 'GUARDRAIL_BLOCKED'])
+  })
+
+  it('tones each badge item: FALLBACK gray, LOW_CONFIDENCE amber, GUARDRAIL_BLOCKED violet', () => {
+    const all = getSuggestionBadgeItems(
+      makeSuggestion({ source: 'FALLBACK', lowConfidence: true, errorCode: 'GUARDRAIL_BLOCKED' }),
+    )
+    expect(all.find((item) => item.id === 'FALLBACK')?.tone).toBe('gray')
+    expect(all.find((item) => item.id === 'LOW_CONFIDENCE')?.tone).toBe('amber')
+    expect(all.find((item) => item.id === 'GUARDRAIL_BLOCKED')?.tone).toBe('violet')
+  })
+
+  it('getSuggestionBadges labels stay in the same order as getSuggestionBadgeItems', () => {
+    const s = makeSuggestion({ source: 'FALLBACK', lowConfidence: true, errorCode: 'GUARDRAIL_BLOCKED' })
+    expect(getSuggestionBadges(s)).toEqual(getSuggestionBadgeItems(s).map((item) => item.label))
+  })
+})
+
+describe('label maps cover every enum key', () => {
+  it('SUGGESTION_STATUS_LABEL and SUGGESTION_STATUS_TONE cover every SuggestionStatus', () => {
+    const statuses = ['PENDING', 'APPROVED', 'REJECTED', 'SUPERSEDED'] as const
+    for (const status of statuses) {
+      expect(typeof SUGGESTION_STATUS_LABEL[status]).toBe('string')
+      expect(SUGGESTION_STATUS_LABEL[status].length).toBeGreaterThan(0)
+      expect(typeof SUGGESTION_STATUS_TONE[status]).toBe('string')
+    }
+  })
+
+  it('SUGGESTION_SOURCE_LABEL covers every SuggestionSource', () => {
+    const sources = ['MODEL', 'FALLBACK'] as const
+    for (const source of sources) {
+      expect(typeof SUGGESTION_SOURCE_LABEL[source]).toBe('string')
+      expect(SUGGESTION_SOURCE_LABEL[source].length).toBeGreaterThan(0)
+    }
+  })
+
+  it('MESSAGE_STATUS_TEXT covers every MessageStatus, including LOGGED', () => {
+    const statuses = ['SENT', 'QUEUED', 'FAILED', 'RECEIVED', 'LOGGED'] as const
+    for (const status of statuses) {
+      expect(typeof MESSAGE_STATUS_TEXT[status]).toBe('string')
+      expect(MESSAGE_STATUS_TEXT[status].length).toBeGreaterThan(0)
+    }
+  })
+
+  it('NBA_LABELS covers every NextBestAction type', () => {
+    const types = [
+      'REPLY_LINE',
+      'CALL',
+      'SEND_PROPOSAL',
+      'SCHEDULE_MEETING',
+      'FOLLOW_UP_LATER',
+      'MOVE_STAGE',
+      'HANDOFF_TO_HUMAN',
+      'CLOSE_LOST',
+    ] as const
+    for (const type of types) {
+      expect(typeof NBA_LABELS[type]).toBe('string')
+      expect(NBA_LABELS[type].length).toBeGreaterThan(0)
+    }
   })
 })
 
 describe('formatDue', () => {
   it('formats null as no due date', () => {
-    expect(formatDue(null)).toBe('No due date')
+    expect(formatDue(null)).toBe('ไม่มีกำหนดเวลา')
   })
 
   it('formats 0 as due today', () => {
-    expect(formatDue(0)).toBe('Due today')
+    expect(formatDue(0)).toBe('ควรทำภายในวันนี้')
   })
 
   it('formats 1 as singular', () => {
-    expect(formatDue(1)).toBe('Due in 1 day')
+    expect(formatDue(1)).toBe('ควรทำภายใน 1 วัน')
   })
 
   it('formats other values as plural', () => {
-    expect(formatDue(5)).toBe('Due in 5 days')
+    expect(formatDue(5)).toBe('ควรทำภายใน 5 วัน')
   })
 })
 
@@ -255,19 +416,19 @@ describe('requireBody (moved from InsightPanel.tsx for testability, S12)', () =>
   })
 
   it('throws the generic message for null', () => {
-    expect(() => requireBody(null)).toThrow('Something went wrong')
+    expect(() => requireBody(null)).toThrow(ERROR_GENERIC)
   })
 
   it('throws the generic message for undefined', () => {
-    expect(() => requireBody(undefined)).toThrow('Something went wrong')
+    expect(() => requireBody(undefined)).toThrow(ERROR_GENERIC)
   })
 
   it('throws for a string body (e.g. a non-JSON response coerced to text)', () => {
-    expect(() => requireBody('not json')).toThrow('Something went wrong')
+    expect(() => requireBody('not json')).toThrow(ERROR_GENERIC)
   })
 
   it('throws for a number body', () => {
-    expect(() => requireBody(42)).toThrow('Something went wrong')
+    expect(() => requireBody(42)).toThrow(ERROR_GENERIC)
   })
 
   // typeof [] === 'object', so an array body passes this guard: documenting
@@ -291,19 +452,19 @@ describe('requireBody with required keys (S17/S18 T7, requireBody(body, ...requi
   })
 
   it('throws the generic message when a required key is missing entirely', () => {
-    expect(() => requireBody({}, 'items')).toThrow('Something went wrong')
+    expect(() => requireBody({}, 'items')).toThrow(ERROR_GENERIC)
   })
 
   it('throws the generic message when a required key is explicitly undefined', () => {
-    expect(() => requireBody({ suggestion: undefined }, 'suggestion')).toThrow('Something went wrong')
+    expect(() => requireBody({ suggestion: undefined }, 'suggestion')).toThrow(ERROR_GENERIC)
   })
 
   it('throws the generic message when a required key is explicitly null', () => {
-    expect(() => requireBody({ suggestion: null }, 'suggestion')).toThrow('Something went wrong')
+    expect(() => requireBody({ suggestion: null }, 'suggestion')).toThrow(ERROR_GENERIC)
   })
 
   it('throws when any one of several required keys is missing', () => {
-    expect(() => requireBody({ items: [] }, 'items', 'suggestion')).toThrow('Something went wrong')
+    expect(() => requireBody({ items: [] }, 'items', 'suggestion')).toThrow(ERROR_GENERIC)
   })
 
   it('does not throw when all of several required keys are present', () => {
@@ -311,8 +472,8 @@ describe('requireBody with required keys (S17/S18 T7, requireBody(body, ...requi
   })
 
   it('still throws for a null/non-object body even when required keys are given', () => {
-    expect(() => requireBody(null, 'items')).toThrow('Something went wrong')
-    expect(() => requireBody('not json', 'items')).toThrow('Something went wrong')
+    expect(() => requireBody(null, 'items')).toThrow(ERROR_GENERIC)
+    expect(() => requireBody('not json', 'items')).toThrow(ERROR_GENERIC)
   })
 
   it('a falsy-but-present value (0, "", false) for a required key does not throw (only undefined/null do)', () => {

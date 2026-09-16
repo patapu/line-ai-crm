@@ -7,7 +7,7 @@ import { IdSchema } from '@/lib/contracts/common'
 import { InsightRequest } from '@/lib/contracts/copilot'
 import { requestInsight, toSuggestionView } from '@/modules/copilot/service'
 
-// [D] app/api/leads/[id]/insights/route.ts: lane owned. POST only, see
+// [B] app/api/leads/[id]/insights/route.ts: lane owned. POST only, see
 // docs/design.md section 3's API table. Never caches (POST never does under
 // Next 16 anyway). maxDuration 30 gives the model call (SDK timeout up to
 // COPILOT_TIMEOUT_MS) plus one DB transaction real headroom on Vercel.

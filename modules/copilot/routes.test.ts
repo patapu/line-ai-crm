@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server'
 import { DomainError } from '@/lib/errors'
 import type { Actor } from '@/lib/auth/dal'
 
-// [D] modules/copilot/routes.test.ts (G7). No DB: requireUser and the
+// [B] modules/copilot/routes.test.ts (G7). No DB: requireUser and the
 // service functions are mocked; the real view mappers (toSuggestionView,
 // toApprovedMessageView) are kept so the response shape is checked for
 // real. See S4-plan.md section G7 and section D.

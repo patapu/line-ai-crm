@@ -7,7 +7,7 @@ import { ruleBasedSuggestion, applyGuardrails, suggestWithFallback } from '@/mod
 import { PROMPT_VERSION } from '@/modules/copilot/instructions'
 import type { CopilotOutput, CrmCopilot, LeadContext, SuggestDeps } from '@/modules/copilot/types'
 
-// [D] modules/copilot/fallback.test.ts (G2). No DB, no network. See
+// [B] modules/copilot/fallback.test.ts (G2). No DB, no network. See
 // docs/design.md section 4 and S4-plan.md section G2.
 
 const DAY_MS = 86_400_000
@@ -188,6 +188,25 @@ describe('ruleBasedSuggestion: confidence and flags', () => {
 
   it('does not flag INSUFFICIENT_CONTEXT when there is at least one message', () => {
     const ctx = makeCtx({ recentMessages: [inbound('สวัสดีค่ะ', 1)] })
+    expect(ruleBasedSuggestion(ctx).flags).not.toContain('INSUFFICIENT_CONTEXT')
+  })
+
+  it('still flags INSUFFICIENT_CONTEXT when there are no messages and only STAGE_CHANGED activities, even with a derived (non-null) text (S3 round 2)', () => {
+    const ctx = makeCtx({
+      recentMessages: [],
+      recentActivities: [{ at: daysAgoIso(1), type: 'STAGE_CHANGED', text: 'NEW -> QUALIFIED' }],
+    })
+    expect(ruleBasedSuggestion(ctx).flags).toContain('INSUFFICIENT_CONTEXT')
+  })
+
+  it('does not flag INSUFFICIENT_CONTEXT when there is a NOTE activity with text (S3 round 2)', () => {
+    const ctx = makeCtx({
+      recentMessages: [],
+      recentActivities: [
+        { at: daysAgoIso(1), type: 'STAGE_CHANGED', text: 'NEW -> QUALIFIED' },
+        { at: daysAgoIso(2), type: 'NOTE', text: 'Called the customer, interested.' },
+      ],
+    })
     expect(ruleBasedSuggestion(ctx).flags).not.toContain('INSUFFICIENT_CONTEXT')
   })
 })

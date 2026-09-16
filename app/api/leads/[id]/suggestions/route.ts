@@ -6,7 +6,7 @@ import { DomainError } from '@/lib/errors'
 import { IdSchema } from '@/lib/contracts/common'
 import { listSuggestions, toSuggestionView } from '@/modules/copilot/service'
 
-// [D] app/api/leads/[id]/suggestions/route.ts: lane owned. GET only, history
+// [B] app/api/leads/[id]/suggestions/route.ts: lane owned. GET only, history
 // for the InsightPanel (design.md section 3's API table). Not cached: it
 // reads the DB on every call and the panel wants a fresh PENDING/APPROVED
 // status right after an approve/reject.

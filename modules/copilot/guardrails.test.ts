@@ -10,7 +10,7 @@ import {
 } from '@/modules/copilot/guardrails'
 import type { LeadContext } from '@/modules/copilot/types'
 
-// [D] modules/copilot/guardrails.test.ts (G1). Pure functions, no DB, no
+// [B] modules/copilot/guardrails.test.ts (G1). Pure functions, no DB, no
 // network. See docs/design.md section 4 and S4-plan.md section G1.
 
 function makeCtx(overrides: Partial<LeadContext> = {}): LeadContext {

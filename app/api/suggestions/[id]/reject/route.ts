@@ -7,7 +7,7 @@ import { IdSchema } from '@/lib/contracts/common'
 import { SuggestionReject } from '@/lib/contracts/copilot'
 import { rejectSuggestion, toSuggestionView } from '@/modules/copilot/service'
 
-// [D] app/api/suggestions/[id]/reject/route.ts: lane owned. POST only, see
+// [B] app/api/suggestions/[id]/reject/route.ts: lane owned. POST only, see
 // docs/design.md section 3's API table and section 5B's reject flow.
 
 export const runtime = 'nodejs'

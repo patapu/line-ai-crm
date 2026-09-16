@@ -8,7 +8,7 @@ import { approveSuggestion, toApprovedMessageView, toSuggestionView } from '@/mo
 import { getLineClient } from '@/modules/line/client'
 import type { LineClient, LineOutboundMessage, LineProfile, PushResult } from '@/modules/line/types'
 
-// [D] app/api/suggestions/[id]/approve/route.ts: lane owned. POST only, see
+// [B] app/api/suggestions/[id]/approve/route.ts: lane owned. POST only, see
 // docs/design.md section 3's API table and section 5B's approve flow.
 // maxDuration 30: Tx A (DB only) plus, when `send` is true, the outside-tx
 // LINE push in deliverQueuedMessage.

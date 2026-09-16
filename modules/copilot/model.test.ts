@@ -5,7 +5,7 @@ import { createCrmCopilot, getSuggestDeps } from '@/modules/copilot/model'
 import { suggestWithFallback } from '@/modules/copilot/fallback'
 import type { CopilotOutput, LeadContext, SuggestDeps } from '@/modules/copilot/types'
 
-// [D] modules/copilot/model.test.ts (G5). No DB, no real network: the model
+// [B] modules/copilot/model.test.ts (G5). No DB, no real network: the model
 // is replaced with MockLanguageModelV4 from 'ai/test'. See S4-plan.md
 // section G5. `server-only` resolves via vitest.config.ts's alias to
 // node_modules/server-only/empty.js, so no vi.mock is needed to import this
