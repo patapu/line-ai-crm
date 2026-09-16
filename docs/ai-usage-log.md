@@ -82,3 +82,7 @@ Newest entries go at the top.
 - On 2026-09-16 Pakorn approved CR-1 and CR-2 and asked for PR #1 to be merged; the approvals are
   recorded in docs/contract-change-requests.md, and the frozen file changes they call for are left
   for a separate layer 0 change.
+- Pakorn then asked for CR-1 and CR-2 to be implemented as a separate PR; on branch
+  layer0-cr-1-cr-2, the lead value contract now caps at 9,999,999,999.99 with cents only
+  (multipleOf 0.01) and client-only is declared in package.json, with Lane A's service guard kept
+  as defence in depth.
