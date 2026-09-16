@@ -23,7 +23,8 @@ export const LeadCreate = z.object({
   companyId: IdSchema.nullish(),
   ownerId: IdSchema.optional(), // default = actor
   source: LeadSourceSchema.default('MANUAL'),
-  value: z.number().nonnegative().max(1e10).nullish(),
+  // Cap matches Lead.value Decimal(12,2): max 9,999,999,999.99, cents only (CR-1).
+  value: z.number().nonnegative().max(9_999_999_999.99).multipleOf(0.01).nullish(),
 })
 
 export const LeadUpdate = LeadCreate.omit({ source: true }).partial() // stage is NOT editable here

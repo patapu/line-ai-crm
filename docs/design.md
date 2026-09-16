@@ -457,7 +457,8 @@ export const LeadCreate = z.object({
   title: z.string().trim().min(1).max(200), contactId: IdSchema,
   companyId: IdSchema.nullish(), ownerId: IdSchema.optional(),   // default = actor
   source: LeadSourceSchema.default('MANUAL'),
-  value: z.number().nonnegative().max(1e10).nullish(),
+  // Cap matches Lead.value Decimal(12,2): max 9,999,999,999.99, cents only (CR-1).
+  value: z.number().nonnegative().max(9_999_999_999.99).multipleOf(0.01).nullish(),
 })
 export const LeadUpdate = LeadCreate.omit({ source: true }).partial()   // stage is NOT editable here
 export const StageChange = z.object({
@@ -989,7 +990,7 @@ export function rejectSuggestion(input: { suggestionId: string; actor: Actor; re
 - **`package.json`**
   - โปรเจกต์เดิมไม่มี lint script และไม่มี eslint แต่ Next 16 ถอด `next lint` ออกแล้ว ต้องเพิ่ม `eslint`, `eslint-config-next` แบบ flat config และ script `lint`
   - เวอร์ชันที่ต้องตรงกัน (แก้ตามส่วนที่ 10): Next 16.3.5, React 19.2.4, zod ^4.6.5, ai ^7.0.100, @ai-sdk/google ^4.0.69, vitest ^4.1.11
-  - แพ็กเกจที่ต้องเพิ่ม: `jose`, `server-only`, `prisma`, `@prisma/client`, `@prisma/adapter-pg` และ `pg`
+  - แพ็กเกจที่ต้องเพิ่ม: `jose`, `server-only`, `client-only`, `@prisma/client`, `@prisma/adapter-pg` และ `pg` (dependencies) และ `prisma` (devDependencies)
 
 ## 10. ข้อเท็จจริงที่ตรวจเพิ่มหลังออกแบบ (2026-09-15) ถ้าขัดกับด้านบนให้ยึดส่วนนี้
 

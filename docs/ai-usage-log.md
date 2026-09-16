@@ -42,6 +42,77 @@ Newest entries go at the top.
 **One change made after human inspection**
 - modules/copilot/guardrails.ts collectAllowedFigures: `if (digitCount >= 9 && digitCount <= 15 && !/\d{4,}\s\d{4,}/.test(m[0]))` -> `if (digitCount >= 9 && digitCount <= 15)`. Reason: Pakorn chose to fail closed. A space-separated price list in trusted text may now be read as a phone run and flagged, but a phone number can no longer license a price. The remaining known bypasses (double space or tab before a currency marker inside a date, markers such as ".-" and "บ.", superscript digits) are listed under Known limits in skills/crm-copilot/SKILL.md.
 
+### 2026-09-16, Lane C
+
+**Sample tasks / prompts**
+- Pakorn asked to check whether Lane A had merged into main, then to rebase lane-c-line onto main and force push
+  once it had, then to open a PR into main, and finally to add this log entry.
+- orchestrator planned each step. The main agent checked the Lane A merge with git and gh, did the rebase and
+  resolved its conflicts, committed, force pushed, and opened PR #4. code-explorer read Lane A's CRM code;
+  code-implementer rewrote webhook.db.test.ts and the CR-3 text; code-tester ran the baseline and final
+  gates and the mutation runs; code-reviewer reviewed the change twice; code-doc-writer wrote this entry.
+- orchestrator's first plan for this log entry had two errors (a step that would create a .context folder inside
+  the repo, and a task id without the lane suffix); the main agent sent it back and the revised plan fixed both.
+
+**What the human reviewed or rejected**
+- Pakorn asked twice whether Lane A had merged. The first check found it had not (Lane A's PR #1 was still open);
+  the second check found it had (origin/main was at 58ff6dc).
+- Pakorn approved rebasing lane-c-line onto main and force pushing ("ทำเลย rebase แล้ว force push ได้"). The rebase
+  had conflicts only in docs/contract-change-requests.md and docs/ai-usage-log.md, which the main agent
+  resolved before it force pushed the branch with a lease, from 0dea411 to 0d6452e.
+- Pakorn has not reviewed the Lane C code diff himself in this session. The review came from the code-reviewer
+  agent in two passes: the first found 1 major (a wrong createLead claim in the CR-3 text, see below)
+  and 3 minors, and the second found 0 blocking issues.
+- Pakorn said "เปิด PR เข้า main ได้เลย" and the main agent opened PR #4 (lane-c-line into main) with gh. It has
+  not been merged yet.
+- Pakorn asked for this log entry to be added.
+
+**One change made after human inspection**
+- Because of Pakorn's rebase and force push approval: Lane C's contract change request was renumbered from CR-1 to
+  CR-3, since main already had Lane A's CR-1 and CR-2. The webhook database tests were switched from tx-backed fake
+  CRM functions to Lane A's real findOrCreateContactByLineUserId and findOrOpenLeadForContact, through a partial
+  vi.mock that delegates to the real functions; that switch, together with reading Lane A's merged code, confirmed
+  findOrOpenLeadForContact writes the LEAD_CREATED activity itself, which CR-3 now records under
+  "Current contract".
+- Found by the code-reviewer agent, not by a human: the CR-3 text wrongly claimed CR-3 would close a race between a
+  manual createLead and a webhook delivery, but createLead never calls findOrOpenLeadForContact. The text was
+  corrected to say CR-3 is defence for future callers and does not change createLead.
+- The case 7 rollback test was made meaningful: the real findOrOpenLeadForContact now runs inside the transaction
+  before the forced failure, so the test proves the lead and its LEAD_CREATED activity roll back together.
+- Mutation runs, actually executed by code-tester, checked that the tests catch regressions: removing
+  lockLineUser made the concurrent delivery test (case 9) fail, and removing the forced failure made
+  case 7 fail; both guards were then restored.
+
+### 2026-09-15, Lane C
+
+**Sample tasks / prompts**
+- Opening prompt from docs/tasks/lane-C.md: build signature.ts and client.mock.ts first (Lanes B and D depend on
+  them), then the webhook route, then send and retry, following design sections 5A, 5B steps 6 to 10, and 10.
+- Work was split across agents: orchestrator planned; provisioner set up the worktree and the test database;
+  code-explorer, code-planner, code-implementer, code-tester and code-reviewer did the lane work in three phases
+  (clients, webhook, send/retry plus UI).
+
+**What the human reviewed or rejected**
+- Pakorn decided where the database tests run. vitest.setup.ts points at `crm_test`, which did not exist in the
+  shared container. The options were: create `crm_test`, reuse the dev database `crm`, or skip DB tests when no
+  database is reachable. He chose to create `crm_test` (a new database plus `prisma migrate deploy` only, no reset,
+  no drop).
+- Pakorn has not reviewed the Lane C code itself yet. The code review in this session came from the code-reviewer
+  agent (first pass: 0 critical, 1 major, 8 minor, 9 nit), and the fixes were checked by tests, not by a human.
+- After the agent re-review came back with 0 blocking findings and 3 minor ones, Pakorn read that summary and
+  decided the 3 minors had to be fixed before the branch was pushed ("แก้ minor 3 ข้อก่อน แล้วค่อย push").
+
+**One change made after human inspection**
+- Before: the Lane C database tests would have targeted `crm_test`, which did not exist, so they could only fail or
+  be pointed at the shared dev database. After: `crm_test` exists with both migrations, and every Lane C database
+  test runs there, creating and deleting only its own synthetic rows by id. Reason: Pakorn picked this option over
+  reusing the dev database `crm`.
+- Also from Pakorn's push condition: before, `MessageBubble` called `Date.now()` during render to hide Retry after
+  23 hours (a hydration mismatch risk), and two tests (the 23 hour retry refusal and the streamed 1 MB webhook cap)
+  would still pass with the guard they claimed to cover removed. After: the expiry check runs only after mount
+  through `useSyncExternalStore`, and both tests were rewritten so they would fail if their guard were removed
+  (confirmed by the code-reviewer agent reasoning through the assertions, not by running the mutated code).
+
 ### 2026-09-15, Lane A
 
 **Sample tasks / prompts**
@@ -99,3 +170,22 @@ Newest entries go at the top.
 - On 2026-09-16 Pakorn approved CR-1 and CR-2 and asked for PR #1 to be merged; the approvals are
   recorded in docs/contract-change-requests.md, and the frozen file changes they call for are left
   for a separate layer 0 change.
+- Pakorn then asked for CR-1 and CR-2 to be implemented as a separate PR; on branch
+  layer0-cr-1-cr-2, the lead value contract now caps at 9,999,999,999.99 with cents only
+  (multipleOf 0.01) and client-only is declared in package.json, with Lane A's service guard kept
+  as defence in depth.
+- Pakorn also asked for docs/design.md to match, so its copy of the lead value contract now shows
+  the new cap and cents rule, and its package list now names client-only next to server-only.
+- Pakorn then asked for PR #2 to get extra boundary tests (whole cent values near the cap must
+  pass, non cent values below the cap must fail with the multiple of error) and consistent CR-1
+  and CR-2 decision wording, and for PR #2 to be merged after that.
+- Pakorn then asked for a separate Lane A PR so the lead form accepts cent values (the value
+  input used step 1, which made the browser block 19.99 even though the contract allows cents)
+  and so the service guard comment describes it as defence in depth instead of a stopgap. Review
+  then caught that the first version of the new comment wrongly named prisma/seed.ts as a
+  guarded caller, so the comment now says it protects any direct caller that skips contract
+  parsing. Pakorn asked for this PR to be opened and merged.
+- Pakorn asked to drop "stopgap" from the CR-1 Reason line; it now points to defence in depth.
+- Pakorn asked for the last three review nits: the service guard comment now says it protects
+  against overflow, the design.md package line separates runtime and dev packages, and the below
+  cap reject tests also assert no too_big issue.

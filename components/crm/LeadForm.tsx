@@ -103,7 +103,15 @@ export function LeadForm({ mode, lead, users, companies, canReassign, initialCon
         </Select>
       </Field>
       <Field label="มูลค่า (บาท)" htmlFor="value" error={fieldErrors.value?.[0]}>
-        <Input id="value" name="value" type="number" min={0} step="1" defaultValue={lead?.value ?? ''} />
+        <Input
+          id="value"
+          name="value"
+          type="number"
+          min={0}
+          max={9999999999.99}
+          step="0.01"
+          defaultValue={lead?.value ?? ''}
+        />
       </Field>
       {mode === 'create' ? (
         <Field label="ที่มา" htmlFor="source">
