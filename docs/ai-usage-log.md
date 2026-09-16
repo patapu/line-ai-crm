@@ -86,3 +86,5 @@ Newest entries go at the top.
   layer0-cr-1-cr-2, the lead value contract now caps at 9,999,999,999.99 with cents only
   (multipleOf 0.01) and client-only is declared in package.json, with Lane A's service guard kept
   as defence in depth.
+- Pakorn also asked for docs/design.md to match, so its copy of the lead value contract now shows
+  the new cap and cents rule, and its package list now names client-only next to server-only.
