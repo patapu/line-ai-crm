@@ -69,6 +69,7 @@ describe('LeadCreate value cap and cents-only rule', () => {
     if (!result.success) {
       expect(result.error.issues.some((issue) => issue.path.join('.') === 'value')).toBe(true)
       expect(result.error.issues.some((issue) => issue.code === 'not_multiple_of')).toBe(true)
+      expect(result.error.issues.some((issue) => issue.code === 'too_big')).toBe(false)
     }
   })
 })
@@ -130,6 +131,7 @@ describe('LeadUpdate value cap and cents-only rule', () => {
     if (!result.success) {
       expect(result.error.issues.some((issue) => issue.path.join('.') === 'value')).toBe(true)
       expect(result.error.issues.some((issue) => issue.code === 'not_multiple_of')).toBe(true)
+      expect(result.error.issues.some((issue) => issue.code === 'too_big')).toBe(false)
     }
   })
 })

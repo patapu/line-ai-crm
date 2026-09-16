@@ -98,3 +98,6 @@ Newest entries go at the top.
   guarded caller, so the comment now says it protects any direct caller that skips contract
   parsing. Pakorn asked for this PR to be opened and merged.
 - Pakorn asked to drop "stopgap" from the CR-1 Reason line; it now points to defence in depth.
+- Pakorn asked for the last three review nits: the service guard comment now says it protects
+  against overflow, the design.md package line separates runtime and dev packages, and the below
+  cap reject tests also assert no too_big issue.
