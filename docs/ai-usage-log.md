@@ -91,3 +91,9 @@ Newest entries go at the top.
 - Pakorn then asked for PR #2 to get extra boundary tests (whole cent values near the cap must
   pass, non cent values below the cap must fail with the multiple of error) and consistent CR-1
   and CR-2 decision wording, and for PR #2 to be merged after that.
+- Pakorn then asked for a separate Lane A PR so the lead form accepts cent values (the value
+  input used step 1, which made the browser block 19.99 even though the contract allows cents)
+  and so the service guard comment describes it as defence in depth instead of a stopgap. Review
+  then caught that the first version of the new comment wrongly named prisma/seed.ts as a
+  guarded caller, so the comment now says it protects any direct caller that skips contract
+  parsing. Pakorn asked for this PR to be opened and merged.
