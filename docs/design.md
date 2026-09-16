@@ -990,7 +990,7 @@ export function rejectSuggestion(input: { suggestionId: string; actor: Actor; re
 - **`package.json`**
   - โปรเจกต์เดิมไม่มี lint script และไม่มี eslint แต่ Next 16 ถอด `next lint` ออกแล้ว ต้องเพิ่ม `eslint`, `eslint-config-next` แบบ flat config และ script `lint`
   - เวอร์ชันที่ต้องตรงกัน (แก้ตามส่วนที่ 10): Next 16.3.5, React 19.2.4, zod ^4.6.5, ai ^7.0.100, @ai-sdk/google ^4.0.69, vitest ^4.1.11
-  - แพ็กเกจที่ต้องเพิ่ม: `jose`, `server-only`, `client-only`, `prisma`, `@prisma/client`, `@prisma/adapter-pg` และ `pg`
+  - แพ็กเกจที่ต้องเพิ่ม: `jose`, `server-only`, `client-only`, `@prisma/client`, `@prisma/adapter-pg` และ `pg` (dependencies) และ `prisma` (devDependencies)
 
 ## 10. ข้อเท็จจริงที่ตรวจเพิ่มหลังออกแบบ (2026-09-15) ถ้าขัดกับด้านบนให้ยึดส่วนนี้
 

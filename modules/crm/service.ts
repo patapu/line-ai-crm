@@ -107,11 +107,12 @@ export async function changeStage(
 export async function createLead(input: z.infer<typeof LeadCreate>, actor: Actor, db?: Db): Promise<Lead> {
   const client = db ?? getDb()
   // Defence in depth mirroring the CR-1 cap in lib/contracts/crm.ts (max
-  // 9,999,999,999.99): protects any caller that invokes the service directly
-  // without parsing LeadCreate or LeadUpdate first. Compare the value rounded
-  // to cents (not the raw float) against 1e12 cents: a value like
-  // 9_999_999_999.999 is itself just under 1e10, but rounds to
-  // 10000000000.00 once stored in a Decimal(12,2) column, which overflows.
+  // 9,999,999,999.99): protects against overflow for any caller that
+  // invokes the service directly without parsing LeadCreate or LeadUpdate
+  // first. Compare the value rounded to cents (not the raw float) against
+  // 1e12 cents: a value like 9_999_999_999.999 is itself just under 1e10,
+  // but rounds to 10000000000.00 once stored in a Decimal(12,2) column,
+  // which overflows.
   if (input.value !== undefined && input.value !== null && Math.round(input.value * 100) >= 1e12) {
     throw new DomainError('VALIDATION_FAILED', 'value too large', {
       value: ['must be at most 9,999,999,999.99'],
