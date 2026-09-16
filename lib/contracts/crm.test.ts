@@ -13,7 +13,25 @@ const baseLeadCreate = {
 }
 
 describe('LeadCreate value cap and cents-only rule', () => {
-  const acceptedValues = [0, 0.01, 0.07, 19.99, 1234.56, 9_999_999_999.99, null, undefined]
+  const acceptedValues = [
+    0,
+    0.01,
+    0.07,
+    19.99,
+    1234.56,
+    9_999_999_999.99,
+    null,
+    undefined,
+    5_000_000_000.05,
+    1_234_567_890.12,
+    9_999_999_999.98,
+    0.29,
+    0.57,
+    1.15,
+    2.03,
+    4.35,
+    100.01,
+  ]
 
   it.each(acceptedValues)('accepts value %s', (value) => {
     const input = value === undefined ? { ...baseLeadCreate } : { ...baseLeadCreate, value }
@@ -39,10 +57,42 @@ describe('LeadCreate value cap and cents-only rule', () => {
       expect(result.error.issues.some((issue) => issue.path.join('.') === 'value')).toBe(true)
     }
   })
+
+  // Non-cent values below the cap: fail the multipleOf(0.01) check, not the max check.
+  // Zod 4's $ZodCheckMultipleOf pushes code "not_multiple_of"
+  // (node_modules/zod/v4/core/checks.js:76).
+  const nonCentBelowCapValues = [5_000_000_000.005, 1_234_567_890.123, 9_999_999_999.985]
+
+  it.each(nonCentBelowCapValues)('rejects non-cent value %s below the cap', (value) => {
+    const result = LeadCreate.safeParse({ ...baseLeadCreate, value })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues.some((issue) => issue.path.join('.') === 'value')).toBe(true)
+      expect(result.error.issues.some((issue) => issue.code === 'not_multiple_of')).toBe(true)
+    }
+  })
 })
 
 describe('LeadUpdate value cap and cents-only rule', () => {
-  const acceptedValues = [0, 0.01, 0.07, 19.99, 1234.56, 9_999_999_999.99, null, undefined]
+  const acceptedValues = [
+    0,
+    0.01,
+    0.07,
+    19.99,
+    1234.56,
+    9_999_999_999.99,
+    null,
+    undefined,
+    5_000_000_000.05,
+    1_234_567_890.12,
+    9_999_999_999.98,
+    0.29,
+    0.57,
+    1.15,
+    2.03,
+    4.35,
+    100.01,
+  ]
 
   it.each(acceptedValues)('accepts value %s', (value) => {
     const input = value === undefined ? {} : { value }
@@ -66,6 +116,20 @@ describe('LeadUpdate value cap and cents-only rule', () => {
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.issues.some((issue) => issue.path.join('.') === 'value')).toBe(true)
+    }
+  })
+
+  // Non-cent values below the cap: fail the multipleOf(0.01) check, not the max check.
+  // Zod 4's $ZodCheckMultipleOf pushes code "not_multiple_of"
+  // (node_modules/zod/v4/core/checks.js:76).
+  const nonCentBelowCapValues = [5_000_000_000.005, 1_234_567_890.123, 9_999_999_999.985]
+
+  it.each(nonCentBelowCapValues)('rejects non-cent value %s below the cap', (value) => {
+    const result = LeadUpdate.safeParse({ value })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues.some((issue) => issue.path.join('.') === 'value')).toBe(true)
+      expect(result.error.issues.some((issue) => issue.code === 'not_multiple_of')).toBe(true)
     }
   })
 })
