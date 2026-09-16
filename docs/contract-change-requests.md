@@ -28,6 +28,18 @@ Newest entries go at the top.
 
 ## Log
 
+### CR-2: `client-only` is imported but not declared as a direct dependency
+
+- Date: 2026-09-16
+- Requested by: Lane A
+- File(s): `package.json` (`dependencies`, owned by Lane F)
+- Current contract: `package.json` `dependencies` declares `server-only` but not `client-only`. `components/crm/auth-redirect.ts` starts with `import 'client-only'` (a build time guard so a server component cannot import the 401 redirect helper); today that import resolves only transitively through `next` / `styled-jsx`, not through a declared dependency.
+- Proposed change: add `"client-only": "^0.0.1"` to `dependencies`, next to `"server-only"`, pinned to the exact version in `node_modules/client-only/package.json` (`0.0.1`), using the same caret pin style `server-only` already uses.
+- Reason: the import breaks if a future `next` or `styled-jsx` release drops or moves that dependency, or if a stricter installer or hoisting layout stops exposing it at the top level. (Alternative considered: replace the import with a runtime `typeof window` guard; Pakorn chose this CR instead.)
+- Impact on other lanes: none known. This only adds a dependency declaration; no Lane A code change is needed after it lands.
+- Status: OPEN
+- Decision: <Pakorn's decision and reasoning, filled in when decided>
+
 ### CR-1: Lead.value max exceeds the Decimal(12,2) column it is stored in
 
 - Date: 2026-09-15

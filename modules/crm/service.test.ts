@@ -478,7 +478,7 @@ describe('findTimelinePage (tie-loss at the page boundary)', () => {
   // `lte` (which would also re-include rows already captured, or drift the
   // cap) would fail this test even though the previous test's id-set
   // assertion alone would not catch an `lte` regression.
-  it('re-fetches the saturated source with an exact-equals createdAt and the 500-row cap, not lte', async () => {
+  it('re-fetches the saturated source with an exact-equals createdAt and the TIE_REFETCH_CAP cap, not lte', async () => {
     const client = {
       activity: { findMany: vi.fn() },
       message: { findMany: vi.fn() },
@@ -511,10 +511,10 @@ describe('findTimelinePage (tie-loss at the page boundary)', () => {
   // Mirrors the activity-source test above, but for the MESSAGE source: the
   // message table (not the activity table) is the one saturated at
   // `limit + 1` with its own last row landing exactly on the boundary, so
-  // the message re-fetch (repository.ts findTimelinePage, the MESSAGE-source
-  // branch around :362-371) must fire with the exact `where`, `take` cap and
+  // the message re-fetch (the message branch of findTimelinePage in
+  // repository.ts) must fire with the exact `where`, `take` cap and
   // `orderBy` the ACTIVITY branch already asserts.
-  it('re-fetches the saturated MESSAGE source with an exact-equals createdAt and the 500-row cap', async () => {
+  it('re-fetches the saturated MESSAGE source with an exact-equals createdAt and the TIE_REFETCH_CAP cap', async () => {
     const client = {
       activity: { findMany: vi.fn() },
       message: { findMany: vi.fn() },

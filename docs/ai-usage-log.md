@@ -76,3 +76,6 @@ Newest entries go at the top.
   every IP in the login tests now sits in a reserved documentation range, and the 401 redirect
   helper now starts with `import 'client-only'`, so a server component that imports it fails the
   build instead of failing at runtime. Gates passed again with 85 tests.
+- Pakorn chose to file CR-2 asking layer 0 to declare client-only in package.json, rather than
+  replacing the import with a runtime guard, and asked for two test naming nits to be fixed (test
+  titles now name TIE_REFETCH_CAP, a comment no longer cites line numbers).
