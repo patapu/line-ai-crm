@@ -28,6 +28,18 @@ Newest entries go at the top.
 
 ## Log
 
+### CR-4: Mount MessageBubble in the lead timeline so failed LINE messages can be retried
+
+- Date: 2026-09-17
+- Requested by: Lane C
+- File(s): `components/crm/Timeline.tsx` (Lane A), `app/(app)/leads/[id]/page.tsx` (Lane A). No frozen file, no signature or contract change.
+- Current contract: `docs/design.md` section 3 and section 5B step 9 define `POST /api/messages/[id]/retry` for the lead owner or an admin, and `docs/tasks/lane-C.md` step 10 gives Lane C `MessageBubble` with props of its own design. Lane C put the Retry button for that route inside `MessageBubble` (shown to viewers who can act on the lead, hidden after the 23 hour retry key window). On `main`, `MessageBubble` is never mounted: `Timeline` renders message items itself, and its header comment says it must never import `MessageBubble` because Lane C owns it and it might not exist yet. `MessageBubble` has existed on `main` since PR #4. Result found in a manual mock-mode check on 2026-09-17: a failed outbound LINE message shows as OUTBOUND FAILED with its error text, but there is no Retry button anywhere in the UI. The retry API itself works (a request from the page returned 200 and the message went back to SENT).
+- Proposed change: in `Timeline`, render `MessageBubble` for 'message' items (props `{ message, canRetry }`) and remove the stale comment; `canRetry` uses the same rule as `Composer`'s `canSend` (the viewer can act on the lead: owner or admin). The lead page already computes `canAct`, so pass it to `Timeline` as a new prop (`Timeline`'s props are Lane A's own, not frozen). Alternative considered, less preferred: `Timeline` adds its own Retry button calling the same route; this duplicates Lane C's UI (Retry hidden after the 23 hour retry key window, error handling) and would drift.
+- Reason: without it users cannot retry a failed LINE message from the UI, which is part of the LINE brief (retry/idempotency) and Lane C's acceptance criteria.
+- Impact on other lanes: Lane A: body and prop change in `Timeline.tsx` and the lead page only. Lane C: none (`MessageBubble` already supports this). Lane B, Lane D, Lane E: none (Lane E docs may mention the Retry button).
+- Status: OPEN
+- Decision:
+
 ### CR-3: Advisory lock in findOrOpenLeadForContact
 
 - Date: 2026-09-15 (renumbered from CR-1 and updated 2026-09-16 after Lane A's merge)
