@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Db, Tx } from '@/lib/db'
 import type { Actor } from '@/lib/auth/dal'
 import { changeStage, createLead, deleteContact, parseIdOrNotFound, updateLead } from '@/modules/crm/service'
-import { buildLeadWhere, findTimelinePage, mergeTimelinePage } from '@/modules/crm/repository'
+import { buildLeadWhere, findTimelinePage, mergeTimelinePage, TIE_REFETCH_CAP } from '@/modules/crm/repository'
 import type { TimelineItem } from '@/lib/contracts/timeline'
 
 // [A] modules/crm/service.test.ts: unit tests against a mocked Prisma client
@@ -503,7 +503,7 @@ describe('findTimelinePage (tie-loss at the page boundary)', () => {
       expect.objectContaining({
         where: { leadId, createdAt: new Date(boundary) },
         orderBy: [{ id: 'desc' }],
-        take: 500,
+        take: TIE_REFETCH_CAP,
       }),
     )
   })
@@ -547,7 +547,7 @@ describe('findTimelinePage (tie-loss at the page boundary)', () => {
       expect.objectContaining({
         where: { leadId, createdAt: new Date(boundary) },
         orderBy: [{ id: 'desc' }],
-        take: 500,
+        take: TIE_REFETCH_CAP,
       }),
     )
     expect(page.nextCursor).toBe(boundary)

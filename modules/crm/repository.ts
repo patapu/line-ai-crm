@@ -295,6 +295,15 @@ export function mergeTimelinePage(items: TimelineItem[], limit: number): Timelin
 }
 
 /**
+ * Accepted limit: if more than TIE_REFETCH_CAP rows of one source share the
+ * boundary timestamp for one lead, the rows past the cap are not returned
+ * (the next page uses strict `before <`, so it will not re-surface what was
+ * already sent). This is accepted because no writer in this app produces
+ * that many rows for one lead in a single millisecond.
+ */
+export const TIE_REFETCH_CAP = 500
+
+/**
  * Fetches `limit + 1` rows from each source, merges them with
  * `mergeTimelinePage`, then closes a tie-loss gap: if a source's page came
  * back exactly `limit + 1` rows deep (i.e. it may have more rows this deep
@@ -334,14 +343,6 @@ export async function findTimelinePage(
 
   const lastAt = new Date(page.nextCursor)
   const extraQueries: Promise<TimelineItem[]>[] = []
-
-  // Accepted limit: if more than TIE_REFETCH_CAP rows of one source share
-  // the boundary timestamp for one lead, the rows past the cap are not
-  // returned (the next page uses strict `before <`, so it will not
-  // re-surface what was already sent). This is accepted because no writer
-  // in this app produces that many rows for one lead in a single
-  // millisecond.
-  const TIE_REFETCH_CAP = 500
 
   const lastAct = acts[acts.length - 1]
   if (acts.length === take && lastAct.createdAt.getTime() === lastAt.getTime()) {

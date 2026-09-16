@@ -128,13 +128,13 @@ describe('POST /api/auth/login', () => {
     mockedGetDb.mockReturnValue(makeFakeDb(vi.fn().mockResolvedValue(null)))
 
     for (let i = 0; i < MAX_EMAIL_FAILURES; i++) {
-      const res = await POST(loginRequest(email, 'wrong-password', `198.51.100.${i}`), {})
+      const res = await POST(loginRequest(email, 'wrong-password', `198.51.100.${i + 1}`), {})
       expect(res.status).toBe(401)
     }
 
     // A brand new IP, never used above: only the email-only counter can
     // explain a 429 here, since this ip|email pair has never failed before.
-    const res = await POST(loginRequest(email, 'wrong-password', '198.51.100.255'), {})
+    const res = await POST(loginRequest(email, 'wrong-password', '198.51.100.31'), {})
     expect(res.status).toBe(429)
   })
 
@@ -146,12 +146,12 @@ describe('POST /api/auth/login', () => {
     // One short of the email-only cap, each from a distinct IP.
     for (let i = 0; i < MAX_EMAIL_FAILURES - 1; i++) {
       mockedVerifyPassword.mockResolvedValueOnce(false)
-      const res = await POST(loginRequest(email, 'wrong-password', `203.0.114.${i}`), {})
+      const res = await POST(loginRequest(email, 'wrong-password', `203.0.113.${i + 50}`), {})
       expect(res.status).toBe(401)
     }
 
     mockedVerifyPassword.mockResolvedValueOnce(true)
-    const okRes = await POST(loginRequest(email, 'correct-password', '203.0.114.200'), {})
+    const okRes = await POST(loginRequest(email, 'correct-password', '203.0.113.200'), {})
     expect(okRes.status).toBe(200)
 
     // If the success had NOT cleared failuresByEmail, the counter would
@@ -160,7 +160,7 @@ describe('POST /api/auth/login', () => {
     // must be 401.
     for (let i = 0; i < 5; i++) {
       mockedVerifyPassword.mockResolvedValueOnce(false)
-      const res = await POST(loginRequest(email, 'wrong-password', `203.0.115.${i}`), {})
+      const res = await POST(loginRequest(email, 'wrong-password', `198.51.100.${i + 40}`), {})
       expect(res.status).toBe(401)
     }
   })

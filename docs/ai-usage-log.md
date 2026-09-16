@@ -71,3 +71,8 @@ Newest entries go at the top.
   timeline tie re-fetch, a comment typo, an unneeded `use client` directive, and a hand written
   window stub in a test. All five are fixed, and the gates were run again: 85 tests passing, lint
   with no errors, typecheck and build passing.
+- After that review, Pakorn asked for its three informational notes to be closed too: the
+  timeline tie cap is now an exported constant that the tests import instead of a hard coded 500,
+  every IP in the login tests now sits in a reserved documentation range, and the 401 redirect
+  helper now starts with `import 'client-only'`, so a server component that imports it fails the
+  build instead of failing at runtime. Gates passed again with 85 tests.
