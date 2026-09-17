@@ -109,7 +109,7 @@ export const SUGGESTION_SOURCE_LABEL: Record<SuggestionSource, string> = {
  */
 export const MESSAGE_STATUS_TEXT: Record<MessageStatus, string> = {
   SENT: 'ส่งข้อความทาง LINE แล้ว',
-  QUEUED: 'ข้อความอยู่ในคิวรอส่งทาง LINE หากยังไม่ถูกส่ง ลองส่งใหม่ได้จาก Timeline ของ lead นี้',
+  QUEUED: 'ข้อความอยู่ในคิวรอส่งทาง LINE หากยังไม่ถูกส่งภายในประมาณ 1 นาที กดปุ่ม "Retry" ได้จาก Timeline ของ lead นี้',
   FAILED: 'ส่งข้อความทาง LINE ไม่สำเร็จ ลองส่งใหม่ได้จาก Timeline ของ lead นี้',
   RECEIVED: 'บันทึกข้อความแล้ว',
   LOGGED: 'บันทึกข้อความแล้ว',

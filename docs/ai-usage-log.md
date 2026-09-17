@@ -37,6 +37,8 @@ Newest entries go at the top.
 - After reviewing CR-4, Pakorn chose option (a): Lane A renders Timeline messages through MessageBubble so a failed LINE send can be retried; when merging main he kept Lane C's CR-4 as the single entry and Lane B's follow-up was added to it.
 - Pakorn asked for the remaining InsightPanel minors to be fixed. A review had shown that an approved or rejected card could disappear when a later Ask AI failed; the Ask AI failure decision was moved into a tested pure helper, and a mutation check confirmed the tests fail if the code compares against the stashed suggestion instead of the rendered one.
 - Pakorn then asked for four small review leftovers (an unused variable behind a new lint warning, a router-triggered reset, two weak tests, stale decision inputs) to be fixed before pushing, rather than pushing with them open.
+- Pakorn added the Gemini key and asked for the live eval. With the default COPILOT_TIMEOUT_MS of 8000 ms, 4 of 7 cases passed and 3 fell back with TIMEOUT at about 8 s. Re-run for this check only with COPILOT_TIMEOUT_MS=25000: 7 of 7 passed from the model, with latencies between about 3.4 s and 7.4 s.
+- After Lane A landed CR-4, Pakorn asked for the InsightPanel status text to be checked against the real Retry button; the QUEUED text was changed to name Retry and mention the 1 minute wait.
 
 **One change made after human inspection**
 - components/copilot/InsightPanel.tsx, Ask AI failure path: re-picking the pending suggestion compared the refreshed list against the stashed suggestion -> it now compares against the suggestion actually rendered at click time. Reason: the review showed the old comparison left a confirmed pending suggestion hidden with no Approve or Reject button.

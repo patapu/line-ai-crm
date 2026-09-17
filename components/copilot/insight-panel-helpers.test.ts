@@ -606,6 +606,11 @@ describe('label maps cover every enum key', () => {
     }
   })
 
+  it('MESSAGE_STATUS_TEXT.QUEUED names the Retry button and the 1 minute wait, since MessageBubble shows Retry immediately but retry returns 409 within 60s of updatedAt', () => {
+    expect(MESSAGE_STATUS_TEXT.QUEUED).toContain('Retry')
+    expect(MESSAGE_STATUS_TEXT.QUEUED).toContain('1 นาที')
+  })
+
   it('NBA_LABELS covers every NextBestAction type', () => {
     const types = [
       'REPLY_LINE',

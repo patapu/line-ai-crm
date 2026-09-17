@@ -39,7 +39,7 @@ Newest entries go at the top.
 - Impact on other lanes: Lane A: body and prop change in `Timeline.tsx` and the lead page only. Lane C: none (`MessageBubble` already supports this). Lane B, Lane D, Lane E: none (Lane E docs may mention the Retry button).
 - Status: APPROVED
 - Decision: 2026-09-17, approved by Pakorn ("approve", meaning CR-4 is approved). Implemented in PR #9 (https://github.com/patapu/line-ai-crm/pull/9) on branch `lane-a-cr4-messagebubble-mount`: `Timeline` renders message items with `MessageBubble` alone (props `{ message, canRetry }`, `canRetry` from the lead page's `canAct`), and activity items keep their existing card.
-- Lane B follow-up (2026-09-17): now that Lane A has landed this change (PR #9), Lane B re-checks the QUEUED/FAILED status text in `components/copilot/insight-panel-helpers.ts` and changes it only if it no longer matches the real Retry control; retry returns 409 for a QUEUED message updated in the last 60 seconds, so the QUEUED text may need a hint to wait.
+- Lane B follow-up (2026-09-17): done after Lane A's PR #9. The FAILED text still matches. The QUEUED text in `components/copilot/insight-panel-helpers.ts` now names the "Retry" button and says to wait about 1 minute, because `MessageBubble` shows Retry at once but `retryMessage` returns 409 for a QUEUED message updated in the last 60 seconds.
 
 ### CR-3: Advisory lock in findOrOpenLeadForContact
 
