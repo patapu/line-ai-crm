@@ -30,6 +30,7 @@ import {
   pendingToApplyOnActionFailure,
   pickAfterFailureRefresh,
   pickCurrentSuggestion,
+  planAskFailure,
   planMountLoad,
   planMountLoadFailure,
   requireBody,
@@ -391,24 +392,24 @@ describe('planMountLoadFailure', () => {
 })
 
 describe('pickAfterFailureRefresh', () => {
-  it('same id still PENDING in items: returns input.current back by reference (no-op, protects an in-progress edit)', () => {
-    const current = makeSuggestion({ id: 'stashed', status: 'PENDING', createdAt: '2026-09-15T00:00:00.000Z' })
-    const sameFromServer = makeSuggestion({ id: 'stashed', status: 'PENDING', createdAt: '2026-09-15T00:00:00.000Z' })
+  it('same id still PENDING in items: returns input.current back by reference (no-op, keeps the draft from resetting over identical data)', () => {
+    const current = makeSuggestion({ id: 'rendered', status: 'PENDING', createdAt: '2026-09-15T00:00:00.000Z' })
+    const sameFromServer = makeSuggestion({ id: 'rendered', status: 'PENDING', createdAt: '2026-09-15T00:00:00.000Z' })
     const result = pickAfterFailureRefresh({ current, items: [sameFromServer] })
     expect(result).toBe(current)
   })
 
-  it('stash superseded, a newer PENDING item exists: returns the newer item', () => {
-    const current = makeSuggestion({ id: 'stashed', status: 'PENDING', createdAt: '2026-09-15T00:00:00.000Z' })
-    const superseded = makeSuggestion({ id: 'stashed', status: 'SUPERSEDED', createdAt: '2026-09-15T00:00:00.000Z' })
+  it('rendered superseded, a newer PENDING item exists: returns the newer item', () => {
+    const current = makeSuggestion({ id: 'rendered', status: 'PENDING', createdAt: '2026-09-15T00:00:00.000Z' })
+    const superseded = makeSuggestion({ id: 'rendered', status: 'SUPERSEDED', createdAt: '2026-09-15T00:00:00.000Z' })
     const newer = makeSuggestion({ id: 'newer', status: 'PENDING', createdAt: '2026-09-16T00:00:00.000Z' })
     const result = pickAfterFailureRefresh({ current, items: [superseded, newer] })
     expect(result).toBe(newer)
   })
 
   it('no PENDING item at all: returns null', () => {
-    const current = makeSuggestion({ id: 'stashed', status: 'PENDING' })
-    const superseded = makeSuggestion({ id: 'stashed', status: 'SUPERSEDED' })
+    const current = makeSuggestion({ id: 'rendered', status: 'PENDING' })
+    const superseded = makeSuggestion({ id: 'rendered', status: 'SUPERSEDED' })
     const rejected = makeSuggestion({ id: 'other', status: 'REJECTED' })
     expect(pickAfterFailureRefresh({ current, items: [superseded, rejected] })).toBeNull()
     expect(pickAfterFailureRefresh({ current, items: [] })).toBeNull()
@@ -425,8 +426,8 @@ describe('pickAfterFailureRefresh', () => {
   })
 
   it('multiple PENDING items in the list: picks the newest by createdAt, per pickCurrentSuggestion semantics', () => {
-    const current = makeSuggestion({ id: 'stashed', status: 'PENDING', createdAt: '2026-09-10T00:00:00.000Z' })
-    const superseded = makeSuggestion({ id: 'stashed', status: 'SUPERSEDED', createdAt: '2026-09-10T00:00:00.000Z' })
+    const current = makeSuggestion({ id: 'rendered', status: 'PENDING', createdAt: '2026-09-10T00:00:00.000Z' })
+    const superseded = makeSuggestion({ id: 'rendered', status: 'SUPERSEDED', createdAt: '2026-09-10T00:00:00.000Z' })
     const older = makeSuggestion({ id: 'older', status: 'PENDING', createdAt: '2026-09-14T00:00:00.000Z' })
     const newest = makeSuggestion({ id: 'newest', status: 'PENDING', createdAt: '2026-09-16T00:00:00.000Z' })
     const result = pickAfterFailureRefresh({ current, items: [older, superseded, newest] })
@@ -434,66 +435,106 @@ describe('pickAfterFailureRefresh', () => {
   })
 })
 
-describe('pickAfterFailureRefresh composed with the Ask AI failure flow (refresh-first, S1 fix pass 2)', () => {
-  // The order changed from "apply the stash, then refresh" to "refresh
-  // first, then re-pick against what was actually RENDERED at click time
-  // (never the stash)". The stash is only ever applied separately, as a
-  // last-resort fallback via pendingToApplyOnActionFailure, when the refresh
-  // itself also fails (Case C below).
+describe('planAskFailure (S1 fix pass 3, replaces the old ad hoc refresh-then-re-pick logic in handleAskAi)', () => {
+  // `rendered` MUST be what the component's own render actually had on
+  // screen at click time, never the mount load's stash: the stash is never
+  // the comparison baseline (see planAskFailure's own doc comment for why).
+  const renderedPending = makeSuggestion({ id: 'rendered-pending', status: 'PENDING', createdAt: '2026-09-15T00:00:00.000Z' })
+  const renderedApproved = makeSuggestion({ id: 'rendered-approved', status: 'APPROVED', createdAt: '2026-09-15T00:00:00.000Z' })
+  const stash = makeSuggestion({ id: 'stash-pending', status: 'PENDING', createdAt: '2026-09-14T00:00:00.000Z' })
+  const supersededRendered = makeSuggestion({ id: 'rendered-pending', status: 'SUPERSEDED', createdAt: '2026-09-15T00:00:00.000Z' })
+  const newerPending = makeSuggestion({ id: 'newer-pending', status: 'PENDING', createdAt: '2026-09-16T00:00:00.000Z' })
 
-  it('Case A (the major regression this pass fixed): rendered current is null at click time, a stash X exists from an in-flight mount load, and the refresh confirms X is still the newest PENDING row: X must be applied, because comparing against the RENDERED current (null) shows different ids', () => {
-    const stashedFromMount = makeSuggestion({ id: 'mount-pending', status: 'PENDING', createdAt: '2026-09-15T00:00:00.000Z' })
-    const refreshedItems = [stashedFromMount]
-    const renderedCurrentAtClick = null
+  const cases: Array<[string, Parameters<typeof planAskFailure>[0], ReturnType<typeof planAskFailure>]> = [
+    [
+      'refresh failed, nothing rendered, nothing stashed: no-op',
+      { rendered: null, stashed: null, refreshed: null },
+      { next: null, replace: false, resetDecisionInputs: false },
+    ],
+    [
+      'refresh failed, nothing rendered, a stash exists: applies the stash (mirrors pendingToApplyOnActionFailure)',
+      { rendered: null, stashed: stash, refreshed: null },
+      { next: stash, replace: true, resetDecisionInputs: true },
+    ],
+    [
+      'refresh failed, something was rendered: keeps it regardless of any stash (stash is never the baseline)',
+      { rendered: renderedPending, stashed: stash, refreshed: null },
+      { next: renderedPending, replace: false, resetDecisionInputs: false },
+    ],
+    [
+      'refresh failed, a decided suggestion was rendered: keeps it too, outcome/lastMessage untouched',
+      { rendered: renderedApproved, stashed: stash, refreshed: null },
+      { next: renderedApproved, replace: false, resetDecisionInputs: false },
+    ],
+    [
+      // Anti-regression case: rendered X-decided, stash null, refreshed [] -> replace false.
+      // Using the stash as the baseline instead of `rendered` has no bearing
+      // here since stashed is null, but this still fails if the function
+      // clears `rendered` just because `refreshed` found no PENDING item.
+      'refreshed, rendered decided (APPROVED), no PENDING at all: keeps rendered, its outcome/lastMessage untouched (finding 1, S1 fix pass 3)',
+      { rendered: renderedApproved, stashed: null, refreshed: [] },
+      { next: renderedApproved, replace: false, resetDecisionInputs: false },
+    ],
+    [
+      'refreshed, rendered decided (APPROVED), a stash also exists but is never consulted: still keeps rendered',
+      { rendered: renderedApproved, stashed: stash, refreshed: [] },
+      { next: renderedApproved, replace: false, resetDecisionInputs: false },
+    ],
+    [
+      // Distinct from the two cases above: here `refreshed` DOES contain a
+      // genuine PENDING item (a fresh Ask AI re-pick landing after this
+      // rendered suggestion was already decided in this session), so the
+      // "rendered decided + no PENDING at all" short-circuit does not apply
+      // and this must fall through to the pickAfterFailureRefresh compare,
+      // which finds a different id and replaces.
+      'refreshed, rendered decided (APPROVED), refresh finds a genuine (different-id) PENDING item: replaces rendered and resets decision inputs',
+      { rendered: renderedApproved, stashed: null, refreshed: [newerPending] },
+      { next: newerPending, replace: true, resetDecisionInputs: true },
+    ],
+    [
+      'refreshed, rendered PENDING, same id still PENDING: no-op (draft untouched)',
+      { rendered: renderedPending, stashed: null, refreshed: [renderedPending] },
+      { next: renderedPending, replace: false, resetDecisionInputs: false },
+    ],
+    [
+      'refreshed, rendered PENDING, superseded by a newer PENDING item: swaps to the newer one and resets decision inputs',
+      { rendered: renderedPending, stashed: null, refreshed: [supersededRendered, newerPending] },
+      { next: newerPending, replace: true, resetDecisionInputs: true },
+    ],
+    [
+      'refreshed, rendered PENDING, no PENDING item left: clears current, no decision-input reset needed',
+      { rendered: renderedPending, stashed: null, refreshed: [supersededRendered] },
+      { next: null, replace: true, resetDecisionInputs: false },
+    ],
+    [
+      'refreshed, nothing rendered, no PENDING item exists either: no-op (both null)',
+      { rendered: null, stashed: stash, refreshed: [] },
+      { next: null, replace: false, resetDecisionInputs: false },
+    ],
+    [
+      // Anti-regression case: rendered null, stash X, refreshed [X PENDING] -> replace true, next X.
+      // This is the major regression the S1 fix pass 2/3 lineage fixed: if
+      // the comparison baseline were the stash instead of `rendered` (null),
+      // X would look like a same-id no-op and never get applied, silently
+      // hiding a PENDING suggestion from the screen.
+      'nothing rendered, a stash exists, and the refresh confirms the stash is still the newest PENDING row: applies it, comparing against rendered (null), never against the stash itself',
+      { rendered: null, stashed: stash, refreshed: [stash] },
+      { next: stash, replace: true, resetDecisionInputs: true },
+    ],
+  ]
 
-    const picked = pickAfterFailureRefresh({ current: renderedCurrentAtClick, items: refreshedItems })
-    expect(picked).toBe(stashedFromMount)
-    // Correct comparison (rendered null vs picked's id): different, so the
-    // caller applies it.
-    expect(picked?.id).not.toBe(renderedCurrentAtClick)
-
-    // This is exactly the regression: if the caller compared the re-pick
-    // against the STASH instead of the rendered current, the same suggestion
-    // would look like a no-op (same id) and never get applied, silently
-    // hiding a PENDING suggestion from the screen.
-    const wronglyComparedAgainstStash = pickAfterFailureRefresh({ current: stashedFromMount, items: refreshedItems })
-    expect(wronglyComparedAgainstStash?.id).toBe(stashedFromMount.id)
+  it.each(cases)('%s', (_name, input, expected) => {
+    expect(planAskFailure(input)).toEqual(expected)
   })
+})
 
-  it('Case B: rendered current X, server superseded X with a newer PENDING item Y: returns Y (ids differ, applied)', () => {
-    const renderedCurrentAtClick = makeSuggestion({ id: 'rendered-x', status: 'PENDING', createdAt: '2026-09-15T00:00:00.000Z' })
-    const supersededOnServer = makeSuggestion({ id: 'rendered-x', status: 'SUPERSEDED', createdAt: '2026-09-15T00:00:00.000Z' })
-    const freshPending = makeSuggestion({ id: 'fresh-y', status: 'PENDING', createdAt: '2026-09-16T00:00:00.000Z' })
-
-    const picked = pickAfterFailureRefresh({ current: renderedCurrentAtClick, items: [supersededOnServer, freshPending] })
-    expect(picked).toBe(freshPending)
-    expect(picked?.id).not.toBe(renderedCurrentAtClick.id)
-  })
-
-  it('Case C: rendered current X, refresh still shows X as the newest PENDING row: returns X back unchanged (same id, not applied, draft untouched)', () => {
-    const renderedCurrentAtClick = makeSuggestion({ id: 'rendered-x', status: 'PENDING', createdAt: '2026-09-15T00:00:00.000Z' })
-    const sameFromServer = makeSuggestion({ id: 'rendered-x', status: 'PENDING', createdAt: '2026-09-15T00:00:00.000Z' })
-
-    const picked = pickAfterFailureRefresh({ current: renderedCurrentAtClick, items: [sameFromServer] })
-    expect(picked).toBe(renderedCurrentAtClick)
-    expect(picked?.id).toBe(renderedCurrentAtClick.id)
-  })
-
-  it('Case D: the refresh itself also fails; the stash is applied only when the rendered current was null at click time (pendingToApplyOnActionFailure, reused by handleAskAi instead of an ad hoc check)', () => {
-    const stashedFromMount = makeSuggestion({ id: 'mount-pending', status: 'PENDING' })
-
-    expect(pendingToApplyOnActionFailure({ current: null, stashed: stashedFromMount })).toBe(stashedFromMount)
-
-    const renderedCurrentAtClick = makeSuggestion({ id: 'rendered-x', status: 'PENDING' })
-    expect(pendingToApplyOnActionFailure({ current: renderedCurrentAtClick, stashed: stashedFromMount })).toBeNull()
-  })
-
-  it('401 on Ask AI never reaches the refresh/re-pick step: loginRedirectFor short-circuits the catch block first', () => {
+describe('planAskFailure: 401 handling stays outside this helper', () => {
+  it('401 on Ask AI never reaches refreshHistory or planAskFailure: loginRedirectFor short-circuits the catch block first', () => {
     const err = new InsightRequestError(401, 'unauthorized')
     const redirectPath = loginRedirectFor(err, '/leads/clead0001', '')
     // A real redirect destination means the component's catch block returns
     // early (redirectOnUnauthorized(err, router) is true) before it ever
-    // refreshes history or calls pickAfterFailureRefresh.
+    // refreshes history or calls planAskFailure.
     expect(redirectPath).toBe('/login?next=%2Fleads%2Fclead0001')
   })
 })

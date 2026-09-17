@@ -418,3 +418,86 @@ export function pickAfterFailureRefresh(input: {
   if (input.current && picked && picked.id === input.current.id) return input.current
   return picked
 }
+
+/** What handleAskAi's catch block should do with `current`/`draft`/`outcome` once a non-401 Ask AI failure has been re-checked against the server. */
+export interface AskFailurePlan {
+  /** The suggestion `current` should end up as: `rendered` unchanged, a different (possibly stashed) suggestion, or `null`. */
+  next: SuggestionView | null
+  /** Whether the caller should actually write `next` (setCurrent/setDraft/setOutcome). `false` means leave everything untouched, including outcome and lastMessage. */
+  replace: boolean
+  /**
+   * Whether the caller should also reset send/applyScore/reason (and
+   * lastMessage) the same way the Ask AI success path does, because this
+   * replaces `rendered` with an actual different suggestion rather than
+   * clearing it to `null`.
+   */
+  resetDecisionInputs: boolean
+}
+
+/**
+ * Pure decision for handleAskAi's catch block (S1 fix pass 3), replacing the
+ * ad hoc refresh-then-re-pick logic that used to live directly in the
+ * component. Called once, right after `refreshHistory` has settled.
+ *
+ * `rendered` MUST be what the component's own render actually had on screen
+ * at click time (the `current` state closure), never the mount load's
+ * stash: a stash that was never rendered has no on-screen value to protect,
+ * and comparing against it instead can wrongly treat an already-PENDING
+ * re-pick as a no-op, leaving it hidden (the pass 1 regression fixed in pass
+ * 2; pickAfterFailureRefresh's own doc comment has the full story). The
+ * stash is never the comparison baseline here either; it is only ever a
+ * last-resort value to apply.
+ *
+ * `refreshed` is `null` when refreshHistory's own refetch failed (no fresh
+ * data at all to re-pick from), or the freshly fetched suggestion list
+ * otherwise.
+ *
+ * Rules, checked in this order:
+ * 1. Refresh failed (`refreshed === null`): a non-null `rendered` is always
+ *    kept as-is (`replace: false`). Only when `rendered` is `null` does this
+ *    fall back to `stashed` (mirrors pendingToApplyOnActionFailure, and
+ *    reuses it): there was nothing on screen to protect, so the stash (or
+ *    `null`, if there was none) is the best available answer.
+ * 2. Refresh succeeded and `rendered` is already decided (status other than
+ *    `PENDING`, e.g. an outcome from a prior Approve/Reject in this
+ *    session) and the refresh found no PENDING suggestion at all: keep
+ *    `rendered` (`replace: false`). A later Ask AI failure must never clear
+ *    an already-decided suggestion, its outcome, or its lastMessage off the
+ *    screen just because this unrelated request also failed.
+ * 3. Otherwise, re-pick the newest PENDING item from `refreshed`
+ *    (pickAfterFailureRefresh) and compare it against `rendered` by id: the
+ *    same id is a no-op (`replace: false`, `next` is `rendered` unchanged,
+ *    so the draft is never reset over identical server data); a different
+ *    id (including `rendered` being `null`, or no PENDING item left at all)
+ *    replaces `rendered` with the new pick, or `null` when none is left.
+ *
+ * `resetDecisionInputs` is `true` only when this replaces `rendered` with an
+ * actual different suggestion (`next !== null`): the caller then resets
+ * send/applyScore/reason/lastMessage the same way the success path does and
+ * sets the draft from `next`. Replacing with `null` (no suggestion left at
+ * all) skips that reset, since the whole decision form unmounts along with
+ * `current` anyway.
+ */
+export function planAskFailure(input: {
+  rendered: SuggestionView | null
+  stashed: SuggestionView | null
+  refreshed: SuggestionView[] | null
+}): AskFailurePlan {
+  const { rendered, stashed, refreshed } = input
+
+  if (refreshed === null) {
+    if (rendered !== null) return { next: rendered, replace: false, resetDecisionInputs: false }
+    const applied = pendingToApplyOnActionFailure({ current: rendered, stashed })
+    return { next: applied, replace: applied !== null, resetDecisionInputs: applied !== null }
+  }
+
+  if (rendered && rendered.status !== 'PENDING' && pickCurrentSuggestion(refreshed) === null) {
+    return { next: rendered, replace: false, resetDecisionInputs: false }
+  }
+
+  const picked = pickAfterFailureRefresh({ current: rendered, items: refreshed })
+  if ((picked?.id ?? null) === (rendered?.id ?? null)) {
+    return { next: rendered, replace: false, resetDecisionInputs: false }
+  }
+  return { next: picked, replace: true, resetDecisionInputs: picked !== null }
+}
