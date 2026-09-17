@@ -25,6 +25,19 @@ Newest entries go at the top.
 
 ## Log
 
+### 2026-09-17, Lane B
+
+**Sample tasks / prompts**
+- "แก้จุด minor ใน InsightPanel ด้วย", then "แก้ 2 จุดนั้นก่อนแล้วค่อย push": fix InsightPanel race conditions between the first history load and Ask AI, approve and reject (a load error shown over a running action, a stale pending suggestion shown after a failed Ask AI).
+- "merge main แล้ว push เลย": merge main (Lane C, CR-1, CR-2) into lane-b-copilot again and check Lane B's approve flow against Lane C's real enqueueLineMessage and deliverQueuedMessage.
+
+**What the human reviewed or rejected**
+- Pakorn chose to fix the two highest-value InsightPanel minors before pushing instead of pushing the earlier commit as is.
+- The cross-lane review found that the lead page renders no retry control for FAILED or QUEUED LINE messages (Lane A's Timeline never mounts Lane C's MessageBubble). Pakorn chose to push Lane B anyway and file CR-4 for Lane A rather than hold the branch.
+
+**One change made after human inspection**
+- components/copilot/InsightPanel.tsx, Ask AI failure path: re-picking the pending suggestion compared the refreshed list against the stashed suggestion -> it now compares against the suggestion actually rendered at click time. Reason: the review showed the old comparison left a confirmed pending suggestion hidden with no Approve or Reject button.
+
 ### 2026-09-16, Lane B
 
 **Sample tasks / prompts**
