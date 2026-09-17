@@ -37,8 +37,8 @@ Newest entries go at the top.
 - Proposed change: in `Timeline`, render `MessageBubble` for 'message' items (props `{ message, canRetry }`) and remove the stale comment; `canRetry` uses the same rule as `Composer`'s `canSend` (the viewer can act on the lead: owner or admin). The lead page already computes `canAct`, so pass it to `Timeline` as a new prop (`Timeline`'s props are Lane A's own, not frozen). Alternative considered, less preferred: `Timeline` adds its own Retry button calling the same route; this duplicates Lane C's UI (Retry hidden after the 23 hour retry key window, error handling) and would drift.
 - Reason: without it users cannot retry a failed LINE message from the UI, which is part of the LINE brief (retry/idempotency) and Lane C's acceptance criteria.
 - Impact on other lanes: Lane A: body and prop change in `Timeline.tsx` and the lead page only. Lane C: none (`MessageBubble` already supports this). Lane B, Lane D, Lane E: none (Lane E docs may mention the Retry button).
-- Status: OPEN
-- Decision:
+- Status: APPROVED
+- Decision: 2026-09-17, approved by Pakorn ("approve", meaning CR-4 is approved). Implementation is pending as a separate Lane A change to `components/crm/Timeline.tsx` and `app/(app)/leads/[id]/page.tsx`.
 
 ### CR-3: Advisory lock in findOrOpenLeadForContact
 
