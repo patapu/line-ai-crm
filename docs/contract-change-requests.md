@@ -28,6 +28,18 @@ Newest entries go at the top.
 
 ## Log
 
+### CR-4: The lead page has no retry control for FAILED or QUEUED LINE messages
+
+- Date: 2026-09-17
+- Requested by: Lane B
+- File(s): `components/crm/Timeline.tsx`, `app/(app)/leads/[id]/page.tsx` (both owned by Lane A). Related, not to be edited by Lane A: `components/messages/MessageBubble.tsx` (Lane C).
+- Current contract: design.md section 5B step 9 says `POST /api/messages/[id]/retry` retries a FAILED message, or a QUEUED one stuck for more than 60 seconds, with the stored retry key. docs/tasks/lane-A.md says the lead page mounts `InsightPanel` and `Composer`/`MessageBubble`. In the merged code, `MessageBubble` (props `{ message, canRetry }`, which renders the Retry button) is not rendered anywhere in the app: `Timeline.tsx` draws message rows itself and its header comment says it must never import `MessageBubble`, and `page.tsx` mounts `Timeline`, `InsightPanel` and `Composer` only.
+- Proposed change: (a) render Timeline items of kind `message` through `MessageBubble` with `canRetry` set to the page's `canActOnLead` result, and remove the "must never import MessageBubble" comment now that Lane C has landed; or (b) Pakorn records a decision that the MVP has no retry UI, in which case Lane B (`InsightPanel` QUEUED/FAILED status text) and Lane C (`Composer` "Use Retry on the message" text) change their copy.
+- Reason: when an approved AI draft or a Composer message ends FAILED, or stays QUEUED, a user has no way to retry it from the UI, which breaks design 5B step 9 ("LINE ล่ม ... retry ด้วย key เดิมได้ ไม่มีอะไรหาย"). Lane B's panel and Lane C's Composer both tell the user to retry from the timeline, where no control exists. Found by the Lane B cross-lane review after merging main (Lane C PR #4) into `lane-b-copilot`. This existed on `main` before Lane B's merge; Lane B did not cause it and does not edit Lane A files.
+- Impact on other lanes: Lane A: Timeline and page change only, no contract change. Lane C: none for option (a) (`MessageBubble` already exists and is tested); note that `retryMessage` returns 409 "message is still being delivered" for a QUEUED message updated in the last 60 seconds, which `MessageBubble` already accounts for. Lane B: after the decision, update the QUEUED/FAILED text in `components/copilot/insight-panel-helpers.ts` to point at the real control (option a) or to "send it as a new message" (option b). Lane D: none.
+- Status: OPEN
+- Decision:
+
 ### CR-3: Advisory lock in findOrOpenLeadForContact
 
 - Date: 2026-09-15 (renumbered from CR-1 and updated 2026-09-16 after Lane A's merge)
