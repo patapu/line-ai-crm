@@ -25,6 +25,24 @@ Newest entries go at the top.
 
 ## Log
 
+### 2026-09-17, Lane B
+
+**Sample tasks / prompts**
+- "แก้จุด minor ใน InsightPanel ด้วย", then "แก้ 2 จุดนั้นก่อนแล้วค่อย push": fix InsightPanel race conditions between the first history load and Ask AI, approve and reject (a load error shown over a running action, a stale pending suggestion shown after a failed Ask AI).
+- "merge main แล้ว push เลย": merge main (Lane C, CR-1, CR-2) into lane-b-copilot again and check Lane B's approve flow against Lane C's real enqueueLineMessage and deliverQueuedMessage.
+
+**What the human reviewed or rejected**
+- Pakorn chose to fix the two highest-value InsightPanel minors before pushing instead of pushing the earlier commit as is.
+- The cross-lane review found that the lead page renders no retry control for FAILED or QUEUED LINE messages (Lane A's Timeline never mounts Lane C's MessageBubble). Pakorn chose to push Lane B anyway and file a CR for Lane A, which duplicated Lane C's CR-4 on the same issue, rather than hold the branch.
+- After reviewing CR-4, Pakorn chose option (a): Lane A renders Timeline messages through MessageBubble so a failed LINE send can be retried; when merging main he kept Lane C's CR-4 as the single entry and Lane B's follow-up was added to it.
+- Pakorn asked for the remaining InsightPanel minors to be fixed. A review had shown that an approved or rejected card could disappear when a later Ask AI failed; the Ask AI failure decision was moved into a tested pure helper, and a mutation check confirmed the tests fail if the code compares against the stashed suggestion instead of the rendered one.
+- Pakorn then asked for four small review leftovers (an unused variable behind a new lint warning, a router-triggered reset, two weak tests, stale decision inputs) to be fixed before pushing, rather than pushing with them open.
+- Pakorn added the Gemini key and asked for the live eval. With the default COPILOT_TIMEOUT_MS of 8000 ms, 4 of 7 cases passed and 3 fell back with TIMEOUT at about 8 s. Re-run for this check only with COPILOT_TIMEOUT_MS=25000: 7 of 7 passed from the model, with latencies between about 3.4 s and 7.4 s.
+- After Lane A landed CR-4, Pakorn asked for the InsightPanel status text to be checked against the real Retry button; the QUEUED text was changed to name Retry and mention the 1 minute wait.
+
+**One change made after human inspection**
+- components/copilot/InsightPanel.tsx, Ask AI failure path: re-picking the pending suggestion compared the refreshed list against the stashed suggestion -> it now compares against the suggestion actually rendered at click time. Reason: the review showed the old comparison left a confirmed pending suggestion hidden with no Approve or Reject button.
+
 ### 2026-09-17, Lane A
 
 **Sample tasks / prompts**
@@ -90,6 +108,23 @@ Newest entries go at the top.
 - Found by the main agent, not a human: the first CR-4 draft overstated that the design docs place the Retry
   button inside MessageBubble; the docs only define the retry route, and the button placement was Lane C's own
   design. The sentence was corrected before committing.
+
+### 2026-09-16, Lane B
+
+**Sample tasks / prompts**
+- Opening prompt from docs/tasks/lane-B.md: implement modules/copilot/fallback.ts first, then the ai v7 wrapper, the service.ts bodies (approval runs enqueueLineMessage inside Tx A and deliverQueuedMessage after commit), the four copilot routes and InsightPanel, then SKILL.md, instructions.md and the 7 eval cases.
+- Work ran through a planner, implementer, tester and reviewer loop: 6 review passes on the guardrail that blocks unlisted prices, percents and discounts in AI drafts. From the third round on, each fix round wrote failing tests first.
+- After Lane A merged into main: merge origin/main into lane-b-copilot, then fix the Lane B findings from a review of how Lane A code touches Lane B (401 redirect in InsightPanel, stage change details in the model context, InsightPanel restyled to Lane A Card and Thai labels, wrong lane markers in file headers).
+
+**What the human reviewed or rejected**
+- Pakorn was shown that three regex rounds on the "is this number a price?" guardrail kept trading false positives for missed prices (for example "ราคาพิเศษ 9,900 สัปดาห์นี้" slipped through). He rejected another regex patch, a word segmenter approach and "ship as is", and chose flag-by-default: any number in a draft that is not in trusted data is flagged unless it is a count or duration with a unit, an ascending range, or a clear date or time (dates and times exempt by his choice).
+- When the review budget ran out with 3 bypasses left ("September 20% off", "30 ก.ย. 2029 บาท", math bold digits), he approved exactly one more fix round instead of documenting them.
+- The final review found that round introduced a regression (a guard added in collectAllowedFigures let a trusted phone number "08 1234 5678" whitelist a draft "5678 บาท"). He rejected keeping it.
+- Pakorn approved keeping components/copilot/insight-panel-helpers.ts and the colocated Lane B test files (modules/copilot/*.test.ts, components/copilot/*.test.ts), which the AGENTS.md ownership table does not list.
+- He has not yet decided whether a SALES user who does not own a lead may press Ask AI and supersede the owner's pending suggestion, so that behaviour was left unchanged.
+
+**One change made after human inspection**
+- modules/copilot/guardrails.ts collectAllowedFigures: `if (digitCount >= 9 && digitCount <= 15 && !/\d{4,}\s\d{4,}/.test(m[0]))` -> `if (digitCount >= 9 && digitCount <= 15)`. Reason: Pakorn chose to fail closed. A space-separated price list in trusted text may now be read as a phone run and flagged, but a phone number can no longer license a price. The remaining known bypasses (double space or tab before a currency marker inside a date, markers such as ".-" and "บ.", superscript digits) are listed under Known limits in skills/crm-copilot/SKILL.md.
 
 ### 2026-09-16, Lane C
 

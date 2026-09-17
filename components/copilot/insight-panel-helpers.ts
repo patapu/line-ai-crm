@@ -1,0 +1,508 @@
+import type { ApprovedMessageView, SuggestionView } from '@/modules/copilot/service'
+import type { BadgeTone } from '@/components/ui/Badge'
+
+// [B] components/copilot/insight-panel-helpers.ts: lane owned, pure. No
+// React, no server imports (this file also has to be importable from a
+// colocated test with no DOM tooling, see docs/design.md section 9 / the S4
+// plan's G8). `import type` only from ./service and ui/Badge: at runtime
+// this module pulls in nothing from the copilot/db stack or the component
+// tree, only shapes.
+
+export type NextBestAction = NonNullable<SuggestionView['nextBestAction']>
+export type SuggestionStatus = SuggestionView['status']
+export type SuggestionSource = SuggestionView['source']
+export type MessageStatus = ApprovedMessageView['status']
+export type LocaleOption = { value: 'auto' | 'th' | 'en'; label: string }
+export type SuggestionBadgeItem = {
+  id: 'FALLBACK' | 'LOW_CONFIDENCE' | 'GUARDRAIL_BLOCKED'
+  label: string
+  tone: BadgeTone
+}
+
+export const DRAFT_MAX = 1000
+export const REJECT_REASON_MAX = 500
+
+// Thai copy deck. English CRM words (lead, stage, LINE) stay English inside
+// Thai sentences, per docs/design.md and the S1 InsightPanel redesign spec.
+export const PANEL_TITLE = 'ผู้ช่วย AI'
+export const LOCALE_LABEL = 'ภาษาของร่างข้อความ'
+export const ASK_AI_LABEL = 'ขอคำแนะนำจาก AI'
+export const ASK_AI_BUSY_LABEL = 'กำลังขอคำแนะนำ...'
+export const LOADING_LABEL = 'กำลังโหลดคำแนะนำ...'
+export const REQUESTING_STATUS = 'AI กำลังวิเคราะห์ lead นี้ อาจใช้เวลาสักครู่'
+export const IDLE_TEXT = 'ยังไม่มีคำแนะนำที่รอตัดสินใจ กด "ขอคำแนะนำจาก AI" เพื่อวิเคราะห์ lead นี้จากข้อมูลล่าสุด'
+export const CURRENT_HEADING = 'คำแนะนำปัจจุบัน'
+export const PENDING_LABEL = 'คำแนะนำจาก AI ยังไม่ถูกบันทึกลง lead จนกว่าคุณจะอนุมัติ'
+export const DECIDED_NOTE = 'คำแนะนำนี้ตัดสินใจแล้ว แก้ไขไม่ได้ กด "ขอคำแนะนำจาก AI" หากต้องการคำแนะนำใหม่'
+export const BADGE_FALLBACK = 'ใช้กฎสำรอง (ไม่ได้ใช้โมเดล AI)'
+export const BADGE_LOW_CONFIDENCE = 'ความมั่นใจต่ำ'
+export const BADGE_GUARDRAIL = 'ร่างข้อความถูกแทนที่โดยระบบป้องกัน'
+export const FLAGS_LABEL = 'ข้อควรระวัง'
+export const SCORE_LABEL = 'คะแนนที่ AI ประเมิน'
+export const SCORE_REASONS_LABEL = 'เหตุผลของคะแนน'
+export const SUMMARY_LABEL = 'สรุป'
+export const NBA_HEADING = 'สิ่งที่ควรทำต่อ'
+export const DRAFT_LABEL = 'ร่างข้อความตอบกลับ'
+export const DRAFT_EDITED_NOTE = 'แก้ไขจากร่างของ AI แล้ว'
+export const DECISION_OPTIONS_LEGEND = 'ตัวเลือกเมื่ออนุมัติ'
+export const SEND_LINE_LABEL = 'ส่งข้อความนี้ทาง LINE'
+export const NO_LINE_HINT = 'ส่งทาง LINE ไม่ได้: ผู้ติดต่อนี้ยังไม่ได้เชื่อมต่อ LINE'
+export const SEND_NEEDS_DRAFT_HINT = 'ใส่ร่างข้อความก่อน จึงจะส่งทาง LINE ได้'
+export const APPLY_SCORE_LABEL = 'ใช้คะแนนนี้กับ lead'
+export const NO_PERMISSION_NOTE = 'เฉพาะเจ้าของ lead หรือผู้ดูแลระบบเท่านั้นที่อนุมัติหรือปฏิเสธคำแนะนำได้'
+export const APPROVE_LABEL = 'อนุมัติคำแนะนำ'
+export const APPROVE_AND_SEND_LABEL = 'อนุมัติและส่งทาง LINE'
+export const APPROVED_OUTCOME = 'อนุมัติคำแนะนำแล้ว'
+export const REJECT_REASON_LABEL = 'เหตุผลที่ปฏิเสธ (ไม่บังคับ)'
+export const REJECT_LABEL = 'ปฏิเสธคำแนะนำ'
+export const REJECTED_OUTCOME = 'ปฏิเสธคำแนะนำแล้ว'
+export const HISTORY_HEADING = 'ประวัติคำแนะนำ'
+export const HISTORY_EMPTY = 'ยังไม่มีคำแนะนำสำหรับ lead นี้ กด "ขอคำแนะนำจาก AI" เพื่อเริ่ม'
+export const ERROR_CONFLICT = 'คำแนะนำนี้ถูกตัดสินใจหรือถูกแทนที่ไปแล้ว รีเฟรชหน้าเพื่อดูข้อมูลล่าสุด'
+export const ERROR_FORBIDDEN = 'คุณไม่มีสิทธิ์ทำรายการนี้กับ lead นี้'
+export const ERROR_GENERIC = 'ทำรายการไม่สำเร็จ ลองใหม่อีกครั้ง หากยังไม่ได้ ให้รีเฟรชหน้า'
+
+export const LOCALE_OPTIONS: LocaleOption[] = [
+  { value: 'auto', label: 'อัตโนมัติ' },
+  { value: 'th', label: 'ภาษาไทย' },
+  { value: 'en', label: 'ภาษาอังกฤษ' },
+]
+
+export const NBA_LABELS: Record<NextBestAction['type'], string> = {
+  REPLY_LINE: 'ตอบกลับทาง LINE',
+  CALL: 'โทรหาลูกค้า',
+  SEND_PROPOSAL: 'ส่งใบเสนอราคา',
+  SCHEDULE_MEETING: 'นัดประชุม',
+  FOLLOW_UP_LATER: 'ติดตามภายหลัง',
+  MOVE_STAGE: 'เลื่อนไป stage ถัดไป',
+  HANDOFF_TO_HUMAN: 'ส่งต่อให้พนักงานดูแล',
+  CLOSE_LOST: 'ปิดเป็นปิดการขายไม่สำเร็จ',
+}
+
+export const SUGGESTION_STATUS_LABEL: Record<SuggestionStatus, string> = {
+  PENDING: 'รอตัดสินใจ',
+  APPROVED: 'อนุมัติแล้ว',
+  REJECTED: 'ปฏิเสธแล้ว',
+  SUPERSEDED: 'ถูกแทนที่',
+}
+
+export const SUGGESTION_STATUS_TONE: Record<SuggestionStatus, BadgeTone> = {
+  PENDING: 'amber',
+  APPROVED: 'green',
+  REJECTED: 'red',
+  SUPERSEDED: 'gray',
+}
+
+export const SUGGESTION_SOURCE_LABEL: Record<SuggestionSource, string> = {
+  MODEL: 'โมเดล AI',
+  FALLBACK: 'กฎสำรอง',
+}
+
+/**
+ * `ApprovedMessageView['status']` mirrors the full `Message['status']` enum
+ * (schema.prisma's MessageStatus), but the approve flow only ever produces
+ * QUEUED, SENT, or FAILED (and RECEIVED on a post-failure re-fetch); LOGGED
+ * is never set by this flow. Kept as a full, exhaustive Record rather than a
+ * partial one, so `MESSAGE_STATUS_TEXT[lastMessage.status]` never needs an
+ * `undefined` check; LOGGED reuses RECEIVED's copy since both describe a
+ * message that was only recorded, with nothing further to report.
+ */
+export const MESSAGE_STATUS_TEXT: Record<MessageStatus, string> = {
+  SENT: 'ส่งข้อความทาง LINE แล้ว',
+  QUEUED: 'ข้อความอยู่ในคิวรอส่งทาง LINE หากยังไม่ถูกส่งภายในประมาณ 1 นาที กดปุ่ม "Retry" ได้จาก Timeline ของ lead นี้',
+  FAILED: 'ส่งข้อความทาง LINE ไม่สำเร็จ ลองส่งใหม่ได้จาก Timeline ของ lead นี้',
+  RECEIVED: 'บันทึกข้อความแล้ว',
+  LOGGED: 'บันทึกข้อความแล้ว',
+}
+
+/** Badge items for a suggestion's provenance and confidence, in a fixed display order. */
+export function getSuggestionBadgeItems(s: SuggestionView): SuggestionBadgeItem[] {
+  const items: SuggestionBadgeItem[] = []
+  if (s.source === 'FALLBACK') items.push({ id: 'FALLBACK', label: BADGE_FALLBACK, tone: 'gray' })
+  if (s.lowConfidence) items.push({ id: 'LOW_CONFIDENCE', label: BADGE_LOW_CONFIDENCE, tone: 'amber' })
+  if (s.errorCode === 'GUARDRAIL_BLOCKED') items.push({ id: 'GUARDRAIL_BLOCKED', label: BADGE_GUARDRAIL, tone: 'violet' })
+  return items
+}
+
+/** Short badge labels for a suggestion's provenance and confidence, derived from getSuggestionBadgeItems. */
+export function getSuggestionBadges(s: SuggestionView): string[] {
+  return getSuggestionBadgeItems(s).map((item) => item.label)
+}
+
+/** The newest PENDING suggestion in a history list (any order), or null when there is none. */
+export function pickCurrentSuggestion(items: SuggestionView[]): SuggestionView | null {
+  return items.reduce<SuggestionView | null>((latest, item) => {
+    if (item.status !== 'PENDING') return latest
+    if (!latest || Date.parse(item.createdAt) > Date.parse(latest.createdAt)) return item
+    return latest
+  }, null)
+}
+
+/** Compares the current draft against the suggestion's original draft, trimmed on both sides. */
+export function isDraftEdited(original: string | null, draft: string): boolean {
+  return draft.trim() !== (original ?? '').trim()
+}
+
+/**
+ * Mirrors the service's own `edited` rule: `replyText` is only sent when the
+ * draft is non-empty. If the user clears the draft entirely and approves
+ * with send:false, `replyText` is omitted here and the service keeps the
+ * original AI draft on the row with `edited:false`: "edited" tracks whether
+ * the text actually *sent* differs from the draft, not whether the textarea
+ * was touched.
+ */
+export function buildApprovePayload(input: {
+  send: boolean
+  applyScore: boolean
+  draft: string
+}): { send: boolean; applyScore: boolean; replyText?: string } {
+  const trimmed = input.draft.trim()
+  return { send: input.send, applyScore: input.applyScore, ...(trimmed ? { replyText: trimmed } : {}) }
+}
+
+/**
+ * Whether the Approve button should be enabled, given the panel's current
+ * form state. `status` is optional so callers that only care about the rest
+ * of the form (and existing callers/tests written before a decision could
+ * be re-approved) keep working; when provided, anything other than
+ * `'PENDING'` disables the button, since a decided/superseded suggestion
+ * can no longer be approved.
+ */
+export function canSubmitApprove(input: {
+  canApprove: boolean
+  busy: boolean
+  send: boolean
+  hasLine: boolean
+  draft: string
+  status?: SuggestionView['status']
+}): boolean {
+  if (!input.canApprove || input.busy) return false
+  if (input.status !== undefined && input.status !== 'PENDING') return false
+  if (input.send && (!input.hasLine || input.draft.trim() === '')) return false
+  return true
+}
+
+/** Whether the Reject button should be enabled. Same `status` rule as canSubmitApprove. */
+export function canSubmitReject(input: {
+  canApprove: boolean
+  busy: boolean
+  status?: SuggestionView['status']
+}): boolean {
+  if (!input.canApprove || input.busy) return false
+  if (input.status !== undefined && input.status !== 'PENDING') return false
+  return true
+}
+
+/** Turns an API error response into a user-facing message. 409 and 403 get a specific Thai message; everything else falls back to the server's own message, then ERROR_GENERIC. */
+export function describeApiError(status: number, body: unknown): string {
+  if (status === 409) return ERROR_CONFLICT
+  if (status === 403) return ERROR_FORBIDDEN
+  const message = (body as { error?: { message?: string } } | null)?.error?.message
+  return message ?? ERROR_GENERIC
+}
+
+/**
+ * `res.ok` but the parsed body is null (an empty 200/204 body, or a body
+ * `parseJsonSafely` had to give up on): every success handler in
+ * InsightPanel.tsx reads a property off this body immediately, and doing
+ * that on `null` throws a raw, unfriendly "Cannot read properties of null"
+ * TypeError. Guarding here turns that into the same generic message
+ * describeApiError's own fallback already uses for an error response with no
+ * message. Moved here (from InsightPanel.tsx) so it can be unit tested
+ * without any DOM tooling, same as every other helper in this file.
+ */
+export function requireBody(body: unknown, ...requiredKeys: string[]): asserts body is Record<string, unknown> {
+  if (body === null || typeof body !== 'object') throw new Error(ERROR_GENERIC)
+  const record = body as Record<string, unknown>
+  for (const key of requiredKeys) {
+    if (record[key] === undefined || record[key] === null) throw new Error(ERROR_GENERIC)
+  }
+}
+
+/** Human-readable next-best-action due date. */
+export function formatDue(dueInDays: number | null): string {
+  if (dueInDays === null) return 'ไม่มีกำหนดเวลา'
+  if (dueInDays === 0) return 'ควรทำภายในวันนี้'
+  return `ควรทำภายใน ${dueInDays} วัน`
+}
+
+/** Character counter under the draft textarea, e.g. "42/1000 ตัวอักษร". */
+export function formatDraftCount(length: number): string {
+  return `${length}/${DRAFT_MAX} ตัวอักษร`
+}
+
+/** Score label for one history row, e.g. "คะแนน 70". */
+export function formatHistoryScore(score: number): string {
+  return `คะแนน ${score}`
+}
+
+/** Thrown by the panel's fetch helpers for any non-OK response, so a catch block can branch on `status` (401 -> redirect to login) without re-parsing the response. */
+export class InsightRequestError extends Error {
+  constructor(
+    public status: number,
+    message: string,
+  ) {
+    super(message)
+    this.name = 'InsightRequestError'
+  }
+}
+
+/**
+ * Mirrors components/crm/auth-redirect.ts's redirect format exactly
+ * (`/login?next=<encoded current pathname + search>`), without importing
+ * it: that helper is Lane A's, reads `window.location` itself, and is typed
+ * around Lane A's `ApiError`. This is a pure function so the panel's caller
+ * reads `window.location` once and this stays unit-testable with plain
+ * strings. Returns null when already on `/login`, so a 401 there never
+ * loops back into itself.
+ */
+export function buildLoginRedirect(pathname: string, search: string): string | null {
+  if (pathname === '/login') return null
+  return `/login?next=${encodeURIComponent(`${pathname}${search}`)}`
+}
+
+/**
+ * Pure decision for a catch block: whether `err` is a 401 from the panel's
+ * own fetch helpers, and if so, where to redirect. Returns null both when
+ * `err` is not an unauthorized InsightRequestError and when it is but
+ * buildLoginRedirect finds no real destination (already on `/login`), so
+ * either way the caller falls through to its normal error handling instead
+ * of navigating.
+ */
+export function loginRedirectFor(err: unknown, pathname: string, search: string): string | null {
+  if (!(err instanceof InsightRequestError) || err.status !== 401) return null
+  return buildLoginRedirect(pathname, search)
+}
+
+/** What the mount-load `.then` callback should do with `current`/`draft`/`outcome`/`phase`: apply its own pick now, stash it for a possible later apply on action failure, or skip it entirely. */
+export type MountLoadCurrentAction = 'apply' | 'stash' | 'skip'
+
+/** Plain snapshot of the three refs InsightPanel tracks across the mount history load's lifetime, read at the moment that load resolves. */
+export interface MountLoadSnapshot {
+  /** True once a later, successful refreshHistory() call has already landed. */
+  historyRefreshed: boolean
+  /** True once some action (Ask AI / Approve / Reject) has successfully committed current/draft/outcome/phase. Sticky for the rest of the mount. */
+  actionCommitted: boolean
+  /** True while some action's fetch is currently pending (not yet succeeded or failed). Transient. */
+  actionInFlight: boolean
+}
+
+export interface MountLoadPlan {
+  /** Whether to setHistory/setHasLine (and setSend(false) when hasLine is false) from this result. */
+  applyHistory: boolean
+  current: MountLoadCurrentAction
+}
+
+/**
+ * Pure decision for the mount history load's `.then` callback (finding 1 of
+ * the S1 fix pass, revised by finding 2 of pass 2).
+ *
+ * Truth table (checked in this order, first match wins):
+ * | historyRefreshed | actionCommitted | actionInFlight | applyHistory | current |
+ * |---|---|---|---|---|
+ * | true  | any   | any   | false | 'skip'  |
+ * | false | true  | any   | true  | 'skip'  |
+ * | false | false | true  | true  | 'stash' |
+ * | false | false | false | true  | 'apply' |
+ *
+ * `historyRefreshed` now gates `current` as well as `applyHistory`: a
+ * successful refreshHistory() is newer truth than this slower initial load
+ * for both, so once it has landed the mount load must skip `current` too,
+ * not just history/hasLine, regardless of any in-flight or committed action
+ * (previously `current` only checked actionCommitted/actionInFlight here,
+ * which let a slow mount load that resolved after a successful post-failure
+ * refresh roll `current`/`draft` back to stale data).
+ *
+ * Otherwise: a committed action has already established the source of
+ * truth, so the mount load must skip `current` forever; an in-flight action
+ * has not yet decided anything, so the mount load stashes its pick instead
+ * of applying it (applying now could show a suggestion while phase is still
+ * 'requesting', or get clobbered a moment later by that action's own
+ * success); otherwise nothing else has ever touched current, so the mount
+ * load applies directly.
+ */
+export function planMountLoad(snapshot: MountLoadSnapshot): MountLoadPlan {
+  const applyHistory = !snapshot.historyRefreshed
+  if (snapshot.historyRefreshed || snapshot.actionCommitted) return { applyHistory, current: 'skip' }
+  if (snapshot.actionInFlight) return { applyHistory, current: 'stash' }
+  return { applyHistory, current: 'apply' }
+}
+
+/**
+ * Plain snapshot read at the moment the mount history load's fetch rejects.
+ *
+ * A 401 (the only other case the caller's catch block distinguishes) is
+ * never represented here: redirectOnUnauthorized always checks that ahead of
+ * calling planMountLoadFailure and returns early on a real redirect, so this
+ * function never runs for that case at all (removed in the S1 fix pass 2;
+ * the field existed only to document a case this function structurally
+ * never sees).
+ */
+export interface MountLoadFailureSnapshot {
+  /** True while some action's fetch is currently pending. Same meaning as MountLoadSnapshot.actionInFlight. */
+  actionInFlight: boolean
+  /** True once some action has already successfully committed. Same meaning as MountLoadSnapshot.actionCommitted. */
+  actionCommitted: boolean
+}
+
+export interface MountLoadFailurePlan {
+  /** Whether the catch block should show this failure as the panel's load error (setError, setErrorScope('load'), setPhase('error')). */
+  showLoadError: boolean
+}
+
+/**
+ * Pure decision for the mount history load's `.catch` callback (finding 1 of
+ * the S1 fix pass): the initial load failing must never override an
+ * in-flight or already-committed Ask AI / Approve / Reject action with a
+ * load error, since that action either owns the screen right now
+ * ('requesting') or has already established the source of truth for
+ * current/draft/outcome/phase. The load error is only ever worth showing
+ * when no action has touched this mount at all.
+ */
+export function planMountLoadFailure(snapshot: MountLoadFailureSnapshot): MountLoadFailurePlan {
+  return { showLoadError: !snapshot.actionInFlight && !snapshot.actionCommitted }
+}
+
+/**
+ * Pure decision for an action's (Ask AI / Approve / Reject) catch block:
+ * whether to apply a suggestion the mount load stashed while this action was
+ * in flight (planMountLoad's 'stash' outcome), now that the action has
+ * failed. Only applies when the action itself never set `current` (Approve
+ * and Reject require a non-null `current` to run at all, so this only ever
+ * matters for a failed Ask AI); returns null otherwise, meaning "do nothing".
+ */
+export function pendingToApplyOnActionFailure(input: {
+  current: SuggestionView | null
+  stashed: SuggestionView | null
+}): SuggestionView | null {
+  if (input.current !== null) return null
+  return input.stashed
+}
+
+/**
+ * Pure re-pick for the Ask AI failure path, called right after refreshing
+ * history and before applying anything to `current`/`draft` (finding 1 of
+ * the S1 fix pass 2): requestInsight's own write supersedes any prior
+ * PENDING row inside the same transaction it inserts the new one in, so
+ * `input.current` may already be SUPERSEDED server-side by the time this
+ * action fails.
+ *
+ * `input.current` MUST be what the caller's own render actually had on
+ * screen at click time (the `current` state closure), never a stash that
+ * was never rendered: a stash has no on-screen value to protect, and
+ * comparing against it instead of the rendered value can wrongly treat an
+ * already-PENDING re-pick as a no-op, leaving it hidden (pass 1's bug). The
+ * mount load's stash (planMountLoad's 'stash' outcome) is only ever applied
+ * separately, as a last-resort fallback via pendingToApplyOnActionFailure,
+ * when the refresh itself also fails.
+ *
+ * Re-picks the newest PENDING item from the freshly fetched `items`
+ * (equivalent to pickCurrentSuggestion) and compares it against
+ * `input.current`:
+ * - same id: nothing actually changed server-side, so this returns
+ *   `input.current` back unchanged. Callers must compare the result's `id`
+ *   against `input.current`'s `id` (not `!==` reference equality) to detect
+ *   this no-op and skip touching `draft`. The textarea is already disabled
+ *   while an action is in flight, so there is no concurrent edit to protect;
+ *   the point of the no-op is only to keep the draft state from being reset
+ *   back to the (identical) server copy when nothing actually changed.
+ * - different id, or no PENDING item at all (returns null): the previously
+ *   rendered suggestion is stale, so this returns the fresh replacement (or
+ *   null) for the caller to apply to both `current` and `draft`.
+ */
+export function pickAfterFailureRefresh(input: {
+  current: SuggestionView | null
+  items: SuggestionView[]
+}): SuggestionView | null {
+  const picked = pickCurrentSuggestion(input.items)
+  if (input.current && picked && picked.id === input.current.id) return input.current
+  return picked
+}
+
+/** What handleAskAi's catch block should do with `current`/`draft`/`outcome` once a non-401 Ask AI failure has been re-checked against the server. */
+export interface AskFailurePlan {
+  /** The suggestion `current` should end up as: `rendered` unchanged, a different (possibly stashed) suggestion, or `null`. */
+  next: SuggestionView | null
+  /** Whether the caller should actually write `next` (setCurrent/setDraft/setOutcome). `false` means leave everything untouched, including outcome and lastMessage. */
+  replace: boolean
+  /**
+   * Whether the caller should also reset send/applyScore/reason (and
+   * lastMessage) the same way the Ask AI success path does. Always equal to
+   * `replace`: whenever the caller writes `next` over `rendered`, it resets
+   * these too, whether `next` is a different suggestion or `null`. Those
+   * fields are plain component state that outlives `current`, so a `null`
+   * `next` still needs the reset, or a stale send/applyScore/reason from
+   * this failed attempt would leak into whatever suggestion this lead shows
+   * next.
+   */
+  resetDecisionInputs: boolean
+}
+
+/**
+ * Pure decision for handleAskAi's catch block (S1 fix pass 3), replacing the
+ * ad hoc refresh-then-re-pick logic that used to live directly in the
+ * component. Called once, right after `refreshHistory` has settled.
+ *
+ * `rendered` MUST be what the component's own render actually had on screen
+ * at click time (the `current` state closure), never the mount load's
+ * stash: a stash that was never rendered has no on-screen value to protect,
+ * and comparing against it instead can wrongly treat an already-PENDING
+ * re-pick as a no-op, leaving it hidden (the pass 1 regression fixed in pass
+ * 2; pickAfterFailureRefresh's own doc comment has the full story). The
+ * stash is never the comparison baseline here either; it is only ever a
+ * last-resort value to apply.
+ *
+ * `refreshed` is `null` when refreshHistory's own refetch failed (no fresh
+ * data at all to re-pick from), or the freshly fetched suggestion list
+ * otherwise.
+ *
+ * Rules, checked in this order:
+ * 1. Refresh failed (`refreshed === null`): a non-null `rendered` is always
+ *    kept as-is (`replace: false`). Only when `rendered` is `null` does this
+ *    fall back to `stashed` (mirrors pendingToApplyOnActionFailure, and
+ *    reuses it): there was nothing on screen to protect, so the stash (or
+ *    `null`, if there was none) is the best available answer.
+ * 2. Refresh succeeded and `rendered` is already decided (status other than
+ *    `PENDING`, e.g. an outcome from a prior Approve/Reject in this
+ *    session) and the refresh found no PENDING suggestion at all: keep
+ *    `rendered` (`replace: false`). A later Ask AI failure must never clear
+ *    an already-decided suggestion, its outcome, or its lastMessage off the
+ *    screen just because this unrelated request also failed.
+ * 3. Otherwise, re-pick the newest PENDING item from `refreshed`
+ *    (pickAfterFailureRefresh) and compare it against `rendered` by id: the
+ *    same id is a no-op (`replace: false`, `next` is `rendered` unchanged,
+ *    so the draft is never reset over identical server data); a different
+ *    id (including `rendered` being `null`, or no PENDING item left at all)
+ *    replaces `rendered` with the new pick, or `null` when none is left.
+ *
+ * `resetDecisionInputs` always equals `replace`: whenever this replaces
+ * `rendered` with `next`, the caller resets send/applyScore/reason/
+ * lastMessage the same way the success path does and sets the draft from
+ * `next`, even when `next` is `null`. Those fields are plain component
+ * state that outlives `current`, so a `null` `next` still needs the reset;
+ * otherwise a stale send/applyScore/reason from this failed attempt would
+ * leak into whatever suggestion this lead shows next.
+ */
+export function planAskFailure(input: {
+  rendered: SuggestionView | null
+  stashed: SuggestionView | null
+  refreshed: SuggestionView[] | null
+}): AskFailurePlan {
+  const { rendered, stashed, refreshed } = input
+
+  if (refreshed === null) {
+    if (rendered !== null) return { next: rendered, replace: false, resetDecisionInputs: false }
+    const applied = pendingToApplyOnActionFailure({ current: rendered, stashed })
+    return { next: applied, replace: applied !== null, resetDecisionInputs: applied !== null }
+  }
+
+  if (rendered && rendered.status !== 'PENDING' && pickCurrentSuggestion(refreshed) === null) {
+    return { next: rendered, replace: false, resetDecisionInputs: false }
+  }
+
+  const picked = pickAfterFailureRefresh({ current: rendered, items: refreshed })
+  if ((picked?.id ?? null) === (rendered?.id ?? null)) {
+    return { next: rendered, replace: false, resetDecisionInputs: false }
+  }
+  return { next: picked, replace: true, resetDecisionInputs: true }
+}
