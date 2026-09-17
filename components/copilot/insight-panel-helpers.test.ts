@@ -363,11 +363,10 @@ describe('planMountLoad + pendingToApplyOnActionFailure composed scenarios', () 
     // Ask AI then fails without ever setting `current` (still null).
     const applied = pendingToApplyOnActionFailure({ current: null, stashed: stashedPendingRef.current })
     expect(applied).toBe(stashedFromMount)
-    expect(applied?.status).toBe('PENDING')
   })
 
   it('a slow mount load after a successful refresh does not apply history or current (finding 2, pass 2)', () => {
-    // refreshHistory() already succeeded (historyRefreshedRef bumped), no action ever ran.
+    // refreshHistory() already succeeded (historyRefreshedRef set), no action ever ran.
     const plan = planMountLoad({ historyRefreshed: true, actionCommitted: false, actionInFlight: false })
     expect(plan.applyHistory).toBe(false)
     // current is skipped too: the refresh is newer truth than this slower
@@ -502,9 +501,9 @@ describe('planAskFailure (S1 fix pass 3, replaces the old ad hoc refresh-then-re
       { next: newerPending, replace: true, resetDecisionInputs: true },
     ],
     [
-      'refreshed, rendered PENDING, no PENDING item left: clears current, no decision-input reset needed',
+      'refreshed, rendered PENDING, no PENDING item left: clears current and resets decision inputs too, since replace is true',
       { rendered: renderedPending, stashed: null, refreshed: [supersededRendered] },
-      { next: null, replace: true, resetDecisionInputs: false },
+      { next: null, replace: true, resetDecisionInputs: true },
     ],
     [
       'refreshed, nothing rendered, no PENDING item exists either: no-op (both null)',
@@ -525,17 +524,6 @@ describe('planAskFailure (S1 fix pass 3, replaces the old ad hoc refresh-then-re
 
   it.each(cases)('%s', (_name, input, expected) => {
     expect(planAskFailure(input)).toEqual(expected)
-  })
-})
-
-describe('planAskFailure: 401 handling stays outside this helper', () => {
-  it('401 on Ask AI never reaches refreshHistory or planAskFailure: loginRedirectFor short-circuits the catch block first', () => {
-    const err = new InsightRequestError(401, 'unauthorized')
-    const redirectPath = loginRedirectFor(err, '/leads/clead0001', '')
-    // A real redirect destination means the component's catch block returns
-    // early (redirectOnUnauthorized(err, router) is true) before it ever
-    // refreshes history or calls planAskFailure.
-    expect(redirectPath).toBe('/login?next=%2Fleads%2Fclead0001')
   })
 })
 

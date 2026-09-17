@@ -202,30 +202,51 @@ export function InsightPanel({ leadId, canApprove }: InsightPanelProps) {
   // refreshHistory: otherwise a slow initial fetch can land after a
   // newer, already-rendered list and silently roll it back.
   const historyRefreshedRef = useRef(false)
-  // Bumped once at the top of every run of the mount effect below, i.e. once
-  // per leadId this component has ever shown (including the first mount).
-  // The current value is the "owner" of every write an in-flight handler
-  // (Ask AI / Approve / Reject / refreshHistory) is allowed to make. Each
-  // handler captures this at its own start and compares it again after every
-  // await; a mismatch means the leadId prop has since changed (the mount
-  // effect reran and bumped it again), so that handler's result belongs to a
-  // lead this component no longer shows and every further state write for it
-  // must be skipped (finding 3, S1 fix pass; generation token, S1 fix pass 3
+  // Bumped once whenever the mount effect below sees an actual leadId
+  // change (including the first mount), never merely because that effect
+  // reran for some other reason (e.g. the router identity changing while
+  // leadId stayed the same): see lastLeadIdRef just below for the compare
+  // that gates the bump. The current value is the "owner" of every write an
+  // in-flight handler (Ask AI / Approve / Reject / refreshHistory) is
+  // allowed to make. Each handler captures this at its own start and
+  // compares it again after every await; a mismatch means the leadId prop
+  // has since changed, so that handler's result belongs to a lead this
+  // component no longer shows and every further state write for it must be
+  // skipped (finding 3, S1 fix pass; generation token, S1 fix pass 3
   // replacing the earlier leadId-value comparison, which could not
   // distinguish "still the same lead" from "leadId went away and came back").
   const mountGenerationRef = useRef(0)
+  // The leadId this component showed the last time the mount effect ran, so
+  // that effect can tell an actual leadId change apart from a rerun caused
+  // by something else in its deps array (the router object identity can
+  // change independently of leadId). Compared and updated only inside that
+  // effect, never read anywhere else.
+  const lastLeadIdRef = useRef<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    // Ref-only reset for the new leadId: no setState here, so this can never
-    // trip react-hooks/set-state-in-effect. Each of these refs tracks state
-    // for the *current* mount only; a leadId change starts a fresh one.
-    mountGenerationRef.current += 1
-    const generation = mountGenerationRef.current
-    actionInFlightRef.current = false
-    actionCommittedRef.current = false
-    stashedPendingRef.current = null
-    historyRefreshedRef.current = false
+    // Ref-only reset for an actual leadId change: no setState here, so this
+    // can never trip react-hooks/set-state-in-effect. Each of these refs
+    // tracks state for the *current* mount only; a leadId change starts a
+    // fresh one. Gated on lastLeadIdRef rather than running unconditionally
+    // on every rerun of this effect, since `router` is also a dependency and
+    // its identity can change on its own: bumping the generation and
+    // resetting these refs on that alone would drop an in-flight result for
+    // the same lead. React strict mode's dev-only double-invoke runs this
+    // effect twice for the very same leadId; lastLeadIdRef already holds
+    // that leadId after the first run, so the second run's comparison is
+    // false and never double-bumps, while the first run's own `cancelled`
+    // flag (captured by its cleanup below) still cancels that first run's
+    // now-stale fetch.
+    const leadChanged = lastLeadIdRef.current !== leadId
+    lastLeadIdRef.current = leadId
+    if (leadChanged) {
+      mountGenerationRef.current += 1
+      actionInFlightRef.current = false
+      actionCommittedRef.current = false
+      stashedPendingRef.current = null
+      historyRefreshedRef.current = false
+    }
 
     fetchHistory(leadId)
       .then((result) => {
@@ -244,6 +265,19 @@ export function InsightPanel({ leadId, canApprove }: InsightPanelProps) {
         if (plan.current === 'apply') {
           setCurrent(pending)
           setDraft(pending?.draftReply ?? '')
+          // Conclusion (item 4, S1 pass): yes, these can be non-default
+          // here. send/applyScore/reason/lastMessage are plain component
+          // state, not scoped to a single leadId or mount generation: they
+          // persist across a leadId prop change (this component is not
+          // remounted) and across an earlier failed action that left them
+          // mid-edit. Reset them the same way the Ask AI / Approve / Reject
+          // success paths do, so a suggestion this branch applies never
+          // inherits stale decision inputs from an earlier lead or a prior
+          // failure.
+          setSend(false)
+          setApplyScore(false)
+          setReason('')
+          setLastMessage(null)
           setOutcome(null)
           setPhase(pending ? 'result' : 'idle')
         } else if (plan.current === 'stash') {
@@ -400,8 +434,8 @@ export function InsightPanel({ leadId, canApprove }: InsightPanelProps) {
         setDraft(plan.next?.draftReply ?? '')
         setOutcome(null)
         if (plan.resetDecisionInputs) {
-          // Same reset the success path above does (~335-338), so a swap to
-          // a genuinely different suggestion never leaves stale decision
+          // Same reset the success path above does, so a swap to a
+          // genuinely different suggestion never leaves stale decision
           // inputs or a stale approve/reject message status behind.
           setSend(false)
           setApplyScore(false)
@@ -438,7 +472,9 @@ export function InsightPanel({ leadId, canApprove }: InsightPanelProps) {
       const body = await parseJsonSafely(res)
       if (!res.ok) throw new InsightRequestError(res.status, describeApiError(res.status, body))
       requireBody(body, 'suggestion')
-      // Finding 3 (S1 fix pass): see handleAskAi.
+      // Both awaits above may resolve after leadId has since moved on to a
+      // different lead; skip every write for it (same generation-token
+      // guard as every other action handler).
       if (mountGenerationRef.current !== generation) return
 
       const approveBody = body as { suggestion: SuggestionView; message: ApprovedMessageView | null }
@@ -459,23 +495,31 @@ export function InsightPanel({ leadId, canApprove }: InsightPanelProps) {
       if (mountGenerationRef.current !== generation) return
       setError(err instanceof Error ? err.message : ERROR_GENERIC)
       setErrorScope('decide')
-      // See handleAskAi: current can only be null here if the lead had no
-      // PENDING suggestion when this render's `current` closure was formed,
-      // which canSubmitApprove already prevents, so this is a no-op for
-      // Approve/Reject today, kept for symmetry and to stay correct if that
-      // guard ever loosens.
+      // `current` can only be null here if the lead had no PENDING
+      // suggestion when this render's `current` closure was formed, which
+      // canSubmitApprove already prevents, so this is a no-op for
+      // Approve/Reject today, kept for symmetry with handleAskAi's own catch
+      // block and to stay correct if that guard ever loosens.
       const stashed = pendingToApplyOnActionFailure({ current, stashed: stashedPendingRef.current })
+      // Cleared unconditionally, not just when `stashed` is applied: a
+      // failed Approve/Reject means whatever the mount load stashed while
+      // this action was in flight is stale either way, and must never
+      // outlive the mount load it came from (see stashedPendingRef's own
+      // doc comment above).
+      stashedPendingRef.current = null
       if (stashed) {
         setCurrent(stashed)
         setDraft(stashed.draftReply ?? '')
         setOutcome(null)
-        stashedPendingRef.current = null
       }
     } finally {
       if (mountGenerationRef.current === generation) {
         actionInFlightRef.current = false
       }
-      // Finding 3 (S1 fix pass 2): see handleAskAi.
+      // Clears busy even for a stale handler whose leadId has since moved
+      // on, so a slow request for a lead the user has navigated away from
+      // never leaves the new lead's controls locked; every other write
+      // above is already guarded to the old lead only.
       if (!redirected) setBusy(false)
     }
   }
@@ -498,7 +542,9 @@ export function InsightPanel({ leadId, canApprove }: InsightPanelProps) {
       const body = await parseJsonSafely(res)
       if (!res.ok) throw new InsightRequestError(res.status, describeApiError(res.status, body))
       requireBody(body, 'suggestion')
-      // Finding 3 (S1 fix pass): see handleAskAi.
+      // Both awaits above may resolve after leadId has since moved on to a
+      // different lead; skip every write for it (same generation-token
+      // guard as every other action handler).
       if (mountGenerationRef.current !== generation) return
 
       actionCommittedRef.current = true
@@ -519,20 +565,29 @@ export function InsightPanel({ leadId, canApprove }: InsightPanelProps) {
       if (mountGenerationRef.current !== generation) return
       setError(err instanceof Error ? err.message : ERROR_GENERIC)
       setErrorScope('decide')
-      // See handleApprove: a no-op today (current can't be null when Reject
-      // runs), kept for symmetry with handleAskAi and future-proofing.
+      // A no-op today (current can't be null when Reject runs), kept for
+      // symmetry with handleApprove and handleAskAi's own catch block, and
+      // to stay correct if that guard ever loosens.
       const stashed = pendingToApplyOnActionFailure({ current, stashed: stashedPendingRef.current })
+      // Cleared unconditionally, not just when `stashed` is applied: a
+      // failed Approve/Reject means whatever the mount load stashed while
+      // this action was in flight is stale either way, and must never
+      // outlive the mount load it came from (see stashedPendingRef's own
+      // doc comment above).
+      stashedPendingRef.current = null
       if (stashed) {
         setCurrent(stashed)
         setDraft(stashed.draftReply ?? '')
         setOutcome(null)
-        stashedPendingRef.current = null
       }
     } finally {
       if (mountGenerationRef.current === generation) {
         actionInFlightRef.current = false
       }
-      // Finding 3 (S1 fix pass 2): see handleAskAi.
+      // Clears busy even for a stale handler whose leadId has since moved
+      // on, so a slow request for a lead the user has navigated away from
+      // never leaves the new lead's controls locked; every other write
+      // above is already guarded to the old lead only.
       if (!redirected) setBusy(false)
     }
   }
@@ -588,8 +643,8 @@ export function InsightPanel({ leadId, canApprove }: InsightPanelProps) {
       {/* Finding 1 (S1 fix pass): gated on phase, not on errorScope alone, so an
           Ask AI failure (errorScope 'ask') does not render this as a fact
           either: every non-401 Ask AI failure leaves phase 'error'
-          unconditionally, see handleAskAi, regardless of whether `current`
-          ends up kept, cleared, or swapped for a different suggestion. */}
+          unconditionally, regardless of whether `current` ends up kept,
+          cleared, or swapped for a different suggestion. */}
       {!current && phase !== 'loading' && phase !== 'error' && <p className="text-sm text-slate-600">{IDLE_TEXT}</p>}
 
       {current && (
@@ -936,9 +991,9 @@ function HistorySection({ history, phase }: { history: SuggestionView[]; phase: 
   // Finding 1 (S1 fix pass): an empty list only means "no suggestions yet"
   // when a load actually confirmed that. While loading, nothing is known
   // yet; while phase is 'error' (a load failure, or any non-401 Ask AI
-  // failure, which always leaves phase 'error', see handleAskAi), an empty
-  // `history` may just mean the fetch that would have populated it never
-  // completed, so this must not render as a fact either.
+  // failure, which always leaves phase 'error'), an empty `history` may
+  // just mean the fetch that would have populated it never completed, so
+  // this must not render as a fact either.
   const knownEmpty = history.length === 0 && phase !== 'loading' && phase !== 'error'
   return (
     <section aria-labelledby="insight-panel-history" className="border-t border-slate-200 pt-4">

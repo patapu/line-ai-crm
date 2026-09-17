@@ -36,6 +36,7 @@ Newest entries go at the top.
 - The cross-lane review found that the lead page renders no retry control for FAILED or QUEUED LINE messages (Lane A's Timeline never mounts Lane C's MessageBubble). Pakorn chose to push Lane B anyway and file CR-4 for Lane A rather than hold the branch.
 - After reviewing CR-4, Pakorn chose option (a): Lane A renders messages in the Timeline through MessageBubble so a failed LINE send can be retried.
 - Pakorn asked for the remaining InsightPanel minors to be fixed. A review had shown that an approved or rejected card could disappear when a later Ask AI failed; the Ask AI failure decision was moved into a tested pure helper, and a mutation check confirmed the tests fail if the code compares against the stashed suggestion instead of the rendered one.
+- Pakorn then asked for four small review leftovers (an unused variable behind a new lint warning, a router-triggered reset, two weak tests, stale decision inputs) to be fixed before pushing, rather than pushing with them open.
 
 **One change made after human inspection**
 - components/copilot/InsightPanel.tsx, Ask AI failure path: re-picking the pending suggestion compared the refreshed list against the stashed suggestion -> it now compares against the suggestion actually rendered at click time. Reason: the review showed the old comparison left a confirmed pending suggestion hidden with no Approve or Reject button.

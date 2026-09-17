@@ -427,9 +427,13 @@ export interface AskFailurePlan {
   replace: boolean
   /**
    * Whether the caller should also reset send/applyScore/reason (and
-   * lastMessage) the same way the Ask AI success path does, because this
-   * replaces `rendered` with an actual different suggestion rather than
-   * clearing it to `null`.
+   * lastMessage) the same way the Ask AI success path does. Always equal to
+   * `replace`: whenever the caller writes `next` over `rendered`, it resets
+   * these too, whether `next` is a different suggestion or `null`. Those
+   * fields are plain component state that outlives `current`, so a `null`
+   * `next` still needs the reset, or a stale send/applyScore/reason from
+   * this failed attempt would leak into whatever suggestion this lead shows
+   * next.
    */
   resetDecisionInputs: boolean
 }
@@ -471,12 +475,13 @@ export interface AskFailurePlan {
  *    id (including `rendered` being `null`, or no PENDING item left at all)
  *    replaces `rendered` with the new pick, or `null` when none is left.
  *
- * `resetDecisionInputs` is `true` only when this replaces `rendered` with an
- * actual different suggestion (`next !== null`): the caller then resets
- * send/applyScore/reason/lastMessage the same way the success path does and
- * sets the draft from `next`. Replacing with `null` (no suggestion left at
- * all) skips that reset, since the whole decision form unmounts along with
- * `current` anyway.
+ * `resetDecisionInputs` always equals `replace`: whenever this replaces
+ * `rendered` with `next`, the caller resets send/applyScore/reason/
+ * lastMessage the same way the success path does and sets the draft from
+ * `next`, even when `next` is `null`. Those fields are plain component
+ * state that outlives `current`, so a `null` `next` still needs the reset;
+ * otherwise a stale send/applyScore/reason from this failed attempt would
+ * leak into whatever suggestion this lead shows next.
  */
 export function planAskFailure(input: {
   rendered: SuggestionView | null
@@ -499,5 +504,5 @@ export function planAskFailure(input: {
   if ((picked?.id ?? null) === (rendered?.id ?? null)) {
     return { next: rendered, replace: false, resetDecisionInputs: false }
   }
-  return { next: picked, replace: true, resetDecisionInputs: picked !== null }
+  return { next: picked, replace: true, resetDecisionInputs: true }
 }
