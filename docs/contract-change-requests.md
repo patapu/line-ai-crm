@@ -38,7 +38,7 @@ Newest entries go at the top.
 - Reason: without it users cannot retry a failed LINE message from the UI, which is part of the LINE brief (retry/idempotency) and Lane C's acceptance criteria.
 - Impact on other lanes: Lane A: body and prop change in `Timeline.tsx` and the lead page only. Lane C: none (`MessageBubble` already supports this). Lane B, Lane D, Lane E: none (Lane E docs may mention the Retry button).
 - Status: APPROVED
-- Decision: 2026-09-17, approved by Pakorn ("approve", meaning CR-4 is approved). Implementation is pending as a separate Lane A change to `components/crm/Timeline.tsx` and `app/(app)/leads/[id]/page.tsx`.
+- Decision: 2026-09-17, approved by Pakorn ("approve", meaning CR-4 is approved). Implemented in PR #9 (https://github.com/patapu/line-ai-crm/pull/9) on branch `lane-a-cr4-messagebubble-mount`: `Timeline` renders message items with `MessageBubble` alone (props `{ message, canRetry }`, `canRetry` from the lead page's `canAct`), and activity items keep their existing card.
 
 ### CR-3: Advisory lock in findOrOpenLeadForContact
 

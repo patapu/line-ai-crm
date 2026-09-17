@@ -25,6 +25,23 @@ Newest entries go at the top.
 
 ## Log
 
+### 2026-09-17, Lane A
+
+**Sample tasks / prompts**
+- "ทำ CR-4 เป็น PR แยกแล้ว merge เลย" (implement CR-4 as a separate PR, then merge it).
+
+**What the human reviewed or rejected**
+- CR-4 did not say whether message items should keep the Timeline card and header around
+  MessageBubble, which has its own header. Pakorn was asked and chose MessageBubble alone for
+  message items, with activity items unchanged.
+
+**One change made after human inspection**
+- Before: Timeline rendered every item, including messages, inside its own card with a
+  timestamp and channel badge, and never mounted MessageBubble, so failed LINE messages had no
+  Retry button. After: message items render as MessageBubble alone with `canRetry` from the
+  lead page, so the Retry button appears for the lead owner or an admin, and nothing is shown
+  twice.
+
 ### 2026-09-17, Lane C
 
 **Sample tasks / prompts**
