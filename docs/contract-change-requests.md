@@ -37,8 +37,9 @@ Newest entries go at the top.
 - Proposed change: (a) render Timeline items of kind `message` through `MessageBubble` with `canRetry` set to the page's `canActOnLead` result, and remove the "must never import MessageBubble" comment now that Lane C has landed; or (b) Pakorn records a decision that the MVP has no retry UI, in which case Lane B (`InsightPanel` QUEUED/FAILED status text) and Lane C (`Composer` "Use Retry on the message" text) change their copy.
 - Reason: when an approved AI draft or a Composer message ends FAILED, or stays QUEUED, a user has no way to retry it from the UI, which breaks design 5B step 9 ("LINE ล่ม ... retry ด้วย key เดิมได้ ไม่มีอะไรหาย"). Lane B's panel and Lane C's Composer both tell the user to retry from the timeline, where no control exists. Found by the Lane B cross-lane review after merging main (Lane C PR #4) into `lane-b-copilot`. This existed on `main` before Lane B's merge; Lane B did not cause it and does not edit Lane A files.
 - Impact on other lanes: Lane A: Timeline and page change only, no contract change. Lane C: none for option (a) (`MessageBubble` already exists and is tested); note that `retryMessage` returns 409 "message is still being delivered" for a QUEUED message updated in the last 60 seconds, which `MessageBubble` already accounts for. Lane B: after the decision, update the QUEUED/FAILED text in `components/copilot/insight-panel-helpers.ts` to point at the real control (option a) or to "send it as a new message" (option b). Lane D: none.
-- Status: OPEN
-- Decision:
+- Status: APPROVED
+- Decision: 2026-09-17, approved by Pakorn ("CR-4 เลือกข้อ a ให้ Lane A แก้", meaning option (a): Timeline renders kind `message` items through Lane C's `MessageBubble` with `canRetry` set to `canActOnLead`, and the "must never import MessageBubble" comment is removed). Implementation owned by Lane A. No Lane B or Lane C code changes.
+- Follow-up: once Lane A lands the fix, Lane B re-checks the QUEUED/FAILED status text in `components/copilot/insight-panel-helpers.ts` and changes it only if it no longer matches the real control. Retry returns 409 for a QUEUED message updated in the last 60 seconds, so check whether the QUEUED text needs a hint to wait before retrying.
 
 ### CR-3: Advisory lock in findOrOpenLeadForContact
 
