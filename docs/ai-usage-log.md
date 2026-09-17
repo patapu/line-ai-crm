@@ -33,13 +33,79 @@ Newest entries go at the top.
 
 **What the human reviewed or rejected**
 - Pakorn chose to fix the two highest-value InsightPanel minors before pushing instead of pushing the earlier commit as is.
-- The cross-lane review found that the lead page renders no retry control for FAILED or QUEUED LINE messages (Lane A's Timeline never mounts Lane C's MessageBubble). Pakorn chose to push Lane B anyway and file CR-4 for Lane A rather than hold the branch.
-- After reviewing CR-4, Pakorn chose option (a): Lane A renders messages in the Timeline through MessageBubble so a failed LINE send can be retried.
+- The cross-lane review found that the lead page renders no retry control for FAILED or QUEUED LINE messages (Lane A's Timeline never mounts Lane C's MessageBubble). Pakorn chose to push Lane B anyway and file a CR for Lane A, which duplicated Lane C's CR-4 on the same issue, rather than hold the branch.
+- After reviewing CR-4, Pakorn chose option (a): Lane A renders Timeline messages through MessageBubble so a failed LINE send can be retried; when merging main he kept Lane C's CR-4 as the single entry and Lane B's follow-up was added to it.
 - Pakorn asked for the remaining InsightPanel minors to be fixed. A review had shown that an approved or rejected card could disappear when a later Ask AI failed; the Ask AI failure decision was moved into a tested pure helper, and a mutation check confirmed the tests fail if the code compares against the stashed suggestion instead of the rendered one.
 - Pakorn then asked for four small review leftovers (an unused variable behind a new lint warning, a router-triggered reset, two weak tests, stale decision inputs) to be fixed before pushing, rather than pushing with them open.
 
 **One change made after human inspection**
 - components/copilot/InsightPanel.tsx, Ask AI failure path: re-picking the pending suggestion compared the refreshed list against the stashed suggestion -> it now compares against the suggestion actually rendered at click time. Reason: the review showed the old comparison left a confirmed pending suggestion hidden with no Approve or Reject button.
+
+### 2026-09-17, Lane A
+
+**Sample tasks / prompts**
+- "ทำ CR-4 เป็น PR แยกแล้ว merge เลย" (implement CR-4 as a separate PR, then merge it).
+
+**What the human reviewed or rejected**
+- CR-4 did not say whether message items should keep the Timeline card and header around
+  MessageBubble, which has its own header. Pakorn was asked and chose MessageBubble alone for
+  message items, with activity items unchanged.
+
+**One change made after human inspection**
+- Before: Timeline rendered every item, including messages, inside its own card with a
+  timestamp and channel badge, and never mounted MessageBubble, so failed LINE messages had no
+  Retry button. After: message items render as MessageBubble alone with `canRetry` from the
+  lead page, so the Retry button appears for the lead owner or an admin, and nothing is shown
+  twice.
+
+### 2026-09-17, Lane C
+
+**Sample tasks / prompts**
+- After PR #2 merged, Pakorn approved rebasing lane-c-line onto main again and force pushing ("ทำเลย rebase แล้ว
+  force push ได้"); after PR #5 (Lane A's cent values change) merged, he approved the same again. orchestrator
+  planned each round; in both rounds the main agent rebased (no conflicts) and force pushed with a lease;
+  code-tester ran typecheck, lint and the tests (249/249) each time, plus npm ci in the first round and the
+  webhook database tests 3 times (15/15 each) in the second.
+- Pakorn said "merge PR #4 ได้เลย" and separately asked for the status of PR #3 (Lane B, still open, with
+  conflicts in docs/ai-usage-log.md) and PR #7 (merged).
+- Pakorn asked for the manual mock-mode check from PR #4's test plan; orchestrator planned and code-explorer
+  researched how to force a failed message without any code change.
+- Once the check found a gap, Pakorn asked to open a new CR; code-doc-writer drafted CR-4. Pakorn then approved
+  CR-4 ("approve") and asked to push the branch, open a PR, and add this log entry.
+
+**What the human reviewed or rejected**
+- Pakorn has not reviewed a code diff himself in this period.
+- Pakorn approved both rebase and force push rounds above. PR #5 had changed Lane A's modules/crm/service.ts,
+  and code-tester reran the gates after that rebase; one force push attempt was first rejected locally by git
+  because the main agent had typed an invalid lease SHA, so nothing was sent, and it then read the full SHA
+  from git ls-remote.
+- Pakorn said "merge PR #4 ได้เลย", but the main agent's merge attempt was blocked by the Claude Code auto
+  mode permission classifier ("Merge Without Review") before anything ran. He asked to add a permission
+  rule; the main agent declined to edit permission settings itself and gave him the settings.json
+  instructions and the risks of allowing everything. Pakorn merged PR #4 himself, and at his request
+  the main agent deleted the lane-c-line branch on origin and locally, after checking it was merged.
+- Pakorn approved the manual check's method: writing synthetic rows to the shared dev database, forcing one sent
+  message to FAILED with SQL, and running the server in the Browser pane. At that time he chose no
+  usage log entry for the check itself; it is recorded here because he later asked for an entry
+  covering the CR-4 work that came out of it. The first login failed with a 403 origin mismatch
+  because the APP_URL override set through cmd did not reach next dev, and the main agent restarted
+  the server with the environment set through PowerShell; the second failed because this worktree's
+  DEMO_PASSWORD was the .env.example placeholder while the dev database had been seeded from Lane
+  A's worktree .env, which the main agent found by comparing the values by hash only. Pakorn then
+  logged in himself; the assistant never read or typed the password.
+- Pakorn approved CR-4 ("approve").
+
+**One change made after human inspection**
+- After Pakorn logged in, the main agent drove the browser and ran read-only database checks: simulated
+  inbound message PASS, reply sent from the lead page PASS, retry API called from the page PASS
+  (including the duplicate 409 path), Retry button FAIL. MessageBubble is never mounted: Lane A's
+  Timeline renders messages itself and forbids importing MessageBubble, so a failed LINE message
+  has no Retry button even though the retry API itself works. That gap became CR-4, which Pakorn
+  then approved. Afterwards the server was stopped, AGENTS.md reverted, and the temporary launch
+  config removed.
+- Found by the main agent, not a human: the first CR-4 draft overstated that the design docs place the Retry
+  button inside MessageBubble; the docs only define the retry route, and the button placement was Lane C's own
+  design. The sentence was corrected before committing.
 
 ### 2026-09-16, Lane B
 

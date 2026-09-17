@@ -106,7 +106,7 @@ export default async function LeadDetailPage(props: PageProps<'/leads/[id]'>) {
 
         <div>
           <h2 className="mb-3 text-sm font-semibold text-slate-900">Timeline</h2>
-          <Timeline key={timeline.items[0]?.id ?? 'empty'} leadId={id} initial={timeline} />
+          <Timeline key={timeline.items[0]?.id ?? 'empty'} leadId={id} initial={timeline} canRetry={canAct} />
         </div>
       </div>
 
