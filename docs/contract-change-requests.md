@@ -38,7 +38,7 @@ Newest entries go at the top.
 - Reason: a VPS Docker deploy of https://ai-crm.kurpakorn.com is planned, following the pattern of Pakorn's other apps on the same VPS (local `build.ps1` builds and pushes an image, server compose runs it). `Dockerfile` was already lane D in the AGENTS.md table; `.dockerignore`, `build.ps1` and `deploy/**` had no owner.
 - Impact on other lanes: none known. This only adds ownership of new or previously unowned paths to lane D. It does not change any other lane's files.
 - Status: APPROVED
-- Decision: 2026-09-17, approved by Pakorn (integration owner). Quote verbatim: "ให้ lane D เป็นเจ้าของ Dockerfile, .dockerignore, build.ps1 และ deploy/". Scope: ownership only. This does not approve moving the deploy target from Vercel and Neon to a VPS (a deviation from `docs/design.md` section 8), a `docs/decisions.md` entry, or any content of these files. Those stay open. PR: pending, not yet opened.
+- Decision: 2026-09-17, approved by Pakorn (integration owner). Quote verbatim: "ให้ lane D เป็นเจ้าของ Dockerfile, .dockerignore, build.ps1 และ deploy/". Scope: ownership only. This does not approve moving the deploy target from Vercel and Neon to a VPS (a deviation from `docs/design.md` section 8), a `docs/decisions.md` entry, or any content of these files. Those stay open. Recorded in PR #10 (https://github.com/patapu/line-ai-crm/pull/10).
 
 ### CR-4: Mount MessageBubble in the lead timeline so failed LINE messages can be retried
 
