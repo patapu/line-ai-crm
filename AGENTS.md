@@ -87,7 +87,7 @@ frozen-signature `service.ts`, but must never change or remove an existing signa
 | `tests/helpers/db.ts`, `auth.ts`, `line.ts` | lane owned | D |
 | `tests/crm-flow.test.ts`, `copilot-fallback.test.ts`, `line-webhook.test.ts` | lane owned | D |
 | `tests/smoke.test.ts`, `tests/security.test.ts` | frozen (layer 0, no database needed; lane D may add new test files) | F |
-| `vercel.json`, `Dockerfile`, `docker-compose.yml` | lane owned | D |
+| `vercel.json`, `Dockerfile`, `docker-compose.yml`, `.dockerignore`, `build.ps1` (repo root), `deploy/**` | lane owned | D |
 | `.github/workflows/ci.yml` | lane owned | D |
 | `README.md`, `docs/architecture.md`, `docs/api.md`, `docs/decisions.md`, `docs/ai-usage-log.md` | lane owned | E |
 
