@@ -1,0 +1,83 @@
+# [D] Copy this to /root/ai-crm-stack/docker-compose.yml on the VPS. See
+# deploy/README.md for the full runbook. No top-level `version:` key
+# (deprecated by Compose).
+#
+# Trap: never name a service `app`, and never use a generic name like `db`.
+# The resume-stack's service is already called `app` on the shared `web`
+# network, so a second service named `app` would make Caddy's `app:3000`
+# resolve to both. A generic `db` would collide the same way if another
+# stack on `web` ever adds a service with that name. This stack uses
+# `ai-crm-db` for Postgres to stay unambiguous. See the kurpakorn VPS
+# topology notes.
+#
+# Every service reads its settings through `env_file`, so this file has no
+# `${...}` interpolation and needs no `--env-file` flag.
+
+name: ai-crm-stack
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  ai-crm:
+    image: patapuputapa/kurpakorn:ai-crm-REPLACE_TS
+    restart: unless-stopped
+    env_file: ai-crm.env
+    depends_on:
+      ai-crm-db:
+        condition: service_healthy
+    networks:
+      - aicrmnet
+      - web
+    mem_limit: 768m
+    logging: *default-logging
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3000/api/health || exit 1']
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+  ai-crm-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    # POSTGRES_USER, POSTGRES_PASSWORD and POSTGRES_DB come from db.env.
+    env_file: db.env
+    volumes:
+      - ai-crm-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aicrmnet
+    mem_limit: 512m
+    logging: *default-logging
+
+  # Not started by `docker compose up`. Run on demand with
+  # `docker compose --profile ops run --rm migrate` (see deploy/README.md).
+  migrate:
+    image: patapuputapa/kurpakorn:ai-crm-migrate-REPLACE_TS
+    profiles: ['ops']
+    env_file: ai-crm.env
+    depends_on:
+      ai-crm-db:
+        condition: service_healthy
+    networks:
+      - aicrmnet
+    restart: 'no'
+    mem_limit: 512m
+    logging: *default-logging
+
+networks:
+  aicrmnet:
+    driver: bridge
+  web:
+    external: true
+
+volumes:
+  ai-crm-pgdata:

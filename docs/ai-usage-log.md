@@ -25,6 +25,20 @@ Newest entries go at the top.
 
 ## Log
 
+### 2026-09-18, Lane D
+
+**Sample tasks / prompts**
+- After CR-5 (lane D owns `Dockerfile`, `.dockerignore`, `build.ps1`, `deploy/**`), Pakorn said "yes" to starting lane D work: write the VPS deploy files, then run typecheck, lint, test and a local docker build. No push, no VPS action.
+- orchestrator planned it; code-explorer gathered facts (standalone output, `prisma.config.ts` reads `DIRECT_URL` at load, `skills/` read at runtime); code-implementer wrote the files; code-tester ran typecheck, lint, tests (1208 passed) and a standalone build; provisioner built the runner and migrate images locally and smoke tested them against the local dev db (`/api/health` 200).
+
+**What the human reviewed or rejected**
+- The deploy files follow the VPS layout that read only checks found on 2026-09-17 (Caddy on the shared `web` network, one compose project per app under `/root/<name>-stack`).
+- code-reviewer found 2 majors in the first draft: the `SESSION_SECRET` placeholder in `deploy/ai-crm.env.example` was 46 characters, so it passed the `min(32)` check and a forgotten edit would run production with a secret from git; and the Postgres service had the generic name `db` while the app also joins the shared `web` network. Both were fixed and a second review found no blocking issues.
+- The first draft also set `COPILOT_TIMEOUT_MS=25000` instead of the 15000 given in the brief; it was changed back to 15000. Pakorn still decides the final value.
+
+**One change made after human inspection**
+- `deploy/ai-crm.env.example`: `SESSION_SECRET=CHANGE_ME_generate_with_openssl_rand_base64_48` -> `SESSION_SECRET=CHANGE_ME`. Reason: a placeholder shorter than 32 characters fails validation, so the app refuses to work instead of running with a known secret (verified: the runner returns 503 with the placeholder).
+
 ### 2026-09-17, Lane B
 
 **Sample tasks / prompts**
