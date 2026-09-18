@@ -25,6 +25,22 @@ Newest entries go at the top.
 
 ## Log
 
+### 2026-09-17, Lane integration
+
+**Sample tasks / prompts**
+- "Deploy the line-ai-crm app ... to the same VPS that serves resume.kurpakorn.com, at https://ai-crm.kurpakorn.com", with rules to confirm before any VPS state change.
+- Read only research: checked PR #3 state with gh (OPEN, not merged; remote main at 75df31b), explored rsm2026/resume-site and vocab-cyber deploy files (build.ps1 pushes patapuputapa/kurpakorn:<app>-<timestamp> to Docker Hub; server compose at /root/n8n-stack), and extracted this repo's deploy contracts (no Dockerfile, vercel.json or scripts/vercel-build.mjs on main; copilot fallback still a stub on main).
+- Produced a deploy plan: separate compose project /opt/ai-crm with its own postgres:16, app bound to 127.0.0.1, consent gated prisma migrate deploy, a new proxy vhost only, and COPILOT_TIMEOUT_MS about 15000 suggested.
+
+**What the human reviewed or rejected**
+- Pakorn reviewed the plan and approved lane D ownership of Dockerfile, .dockerignore, build.ps1 and deploy/.
+- Open, not yet answered: merge PR #3 first, SSH user, Docker Hub repo visibility, separate DB and compose project, host port 3100, seed on production, nightly backups.
+- No VPS command was run, and no secrets were read, before the ownership decision.
+- 2026-09-18: Pakorn answered: PR #3 is merged, SSH user is root (or admin/administrator), the Docker Hub repo is private, use a separate DB and compose project, check the port again, seed yes, nightly backups no. With that consent the agent ran read only checks on the VPS (tried the three SSH users; only root worked; listed ports, containers, compose projects, the Caddyfile and resume-stack compose with secret values masked). It found Caddy in n8n-stack serving 80/443 on the docker network `web`, one compose project per app under /root/<name>-stack, and resume's service named `app` on `web`. The plan changed: /root/ai-crm-stack instead of /opt/ai-crm, no host port, and a service name other than `app` so Caddy does not mix it with resume.
+
+**One change made after human inspection**
+- The agent did not open a PR when Pakorn clicked Create PR, because the branch had no commits and the only new file was a local planning log under .context/ that no lane owns. Instead, after Pakorn's ownership decision, CR-5 and the AGENTS.md ownership table update were written.
+
 ### 2026-09-17, Lane B
 
 **Sample tasks / prompts**

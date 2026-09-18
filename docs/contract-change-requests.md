@@ -28,6 +28,18 @@ Newest entries go at the top.
 
 ## Log
 
+### CR-5: Lane D owns Dockerfile, .dockerignore, build.ps1 and deploy/** for a VPS Docker deploy
+
+- Date: 2026-09-17
+- Requested by: Integration (Pakorn)
+- File(s): `Dockerfile` (repo root, already lane D in the AGENTS.md table), `.dockerignore` (repo root, no owner), `build.ps1` (repo root, no owner), `deploy/**` (no owner)
+- Current contract: the AGENTS.md ownership table already lists `Dockerfile` as lane owned, owner D, together with `vercel.json` and `docker-compose.yml`. `.dockerignore`, `build.ps1` (repo root) and `deploy/**` have no owner in that table today.
+- Proposed change: give lane D ownership of `.dockerignore`, `build.ps1` (repo root) and `deploy/**`, matching the ownership `Dockerfile` already has.
+- Reason: a VPS Docker deploy of https://ai-crm.kurpakorn.com is planned, following the pattern of Pakorn's other apps on the same VPS (local `build.ps1` builds and pushes an image, server compose runs it). `Dockerfile` was already lane D in the AGENTS.md table; `.dockerignore`, `build.ps1` and `deploy/**` had no owner.
+- Impact on other lanes: none known. This only adds ownership of new or previously unowned paths to lane D. It does not change any other lane's files.
+- Status: APPROVED
+- Decision: 2026-09-17, approved by Pakorn (integration owner). Quote verbatim: "ให้ lane D เป็นเจ้าของ Dockerfile, .dockerignore, build.ps1 และ deploy/". Scope: ownership only. This does not approve moving the deploy target from Vercel and Neon to a VPS (a deviation from `docs/design.md` section 8), a `docs/decisions.md` entry, or any content of these files. Those stay open. PR: pending, not yet opened.
+
 ### CR-4: Mount MessageBubble in the lead timeline so failed LINE messages can be retried
 
 - Date: 2026-09-17
