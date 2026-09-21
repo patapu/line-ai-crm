@@ -12,6 +12,7 @@ import { useMemo, useState, useSyncExternalStore } from 'react'
 import { useRouter } from 'next/navigation'
 import type { TimelineItem } from '@/lib/contracts/timeline'
 import { readErrorMessage } from '@/components/messages/errors'
+import { formatDateTime } from '@/components/ui/format'
 
 type MessageItem = Extract<TimelineItem, { kind: 'message' }>
 
@@ -129,7 +130,7 @@ export function MessageBubble({ message, canRetry }: MessageBubbleProps) {
           <span>{message.channel}</span>
           <span>{message.direction}</span>
           <time dateTime={message.at} suppressHydrationWarning>
-            {new Date(message.at).toLocaleString()}
+            {formatDateTime(message.at)}
           </time>
           <span className="rounded bg-white px-1 text-[10px] uppercase text-slate-500">{message.status}</span>
           {message.aiSuggestionId && (

@@ -25,6 +25,19 @@ Newest entries go at the top.
 
 ## Log
 
+### 2026-09-21, Lane C
+
+**Sample tasks / prompts**
+- "ขอ script to presentation" for https://ai-crm.kurpakorn.com, then "ลอง test เป็น mobile ตาม script": the agent walked the demo script in the in-app browser at 375x812 (pipeline, leads filter, stage change, note, Ask AI, approve and send, manual LINE send, contacts, companies, `/api/health`).
+- "แก้บั๊กเวลาใน MessageBubble ให้หน่อย": orchestrator planned it; code-implementer changed `components/messages/MessageBubble.tsx`; code-tester added `components/messages/__tests__/MessageBubble.format.test.tsx`; code-reviewer reviewed it.
+
+**What the human reviewed or rejected**
+- The browser run showed Ask AI always used the rule-based fallback. The container log said `NO_API_KEY`. Pakorn said the key was already set and showed the env file. The agent found a second, empty `GOOGLE_GENERATIVE_AI_API_KEY=` line from the example template that overrode it. After Pakorn fixed the file, Ask AI returned a model suggestion.
+- code-reviewer found 0 critical and 0 major issues. Its minor note (no test for the formatted time) was covered by the new test file. Typecheck and lint passed, and the 2 new tests passed. The full `npm test` run had 2 DB-backed lane D files fail because no local Postgres was running; they are not related to this change.
+
+**One change made after human inspection**
+- `components/messages/MessageBubble.tsx`: `new Date(message.at).toLocaleString()` -> `formatDateTime(message.at)` from `components/ui/format.ts`. Reason: on production the server (UTC, en-US) rendered "9/21/2026, 4:40:39 AM" while the client and Timeline showed Bangkok time in Thai format, so bubble times were wrong and did not match the rest of the page.
+
 ### 2026-09-18, Lane D
 
 **Sample tasks / prompts**
