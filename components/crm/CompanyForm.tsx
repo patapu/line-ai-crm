@@ -71,7 +71,7 @@ export function CompanyForm({ mode, company }: CompanyFormProps) {
       <Field label="ขนาดองค์กร" htmlFor="sizeBand" error={fieldErrors.sizeBand?.[0]}>
         <Input id="sizeBand" name="sizeBand" defaultValue={company?.sizeBand ?? ''} maxLength={50} />
       </Field>
-      {formError ? <p className="text-sm text-red-600">{formError}</p> : null}
+      {formError ? <p className="text-sm text-danger">{formError}</p> : null}
       <Button type="submit" disabled={submitting}>
         {mode === 'create' ? 'สร้างบริษัท' : 'บันทึก'}
       </Button>

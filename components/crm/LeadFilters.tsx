@@ -18,7 +18,7 @@ export function LeadFilters({ values, users, companies }: LeadFiltersProps) {
     <form
       method="get"
       action="/leads"
-      className="mb-4 grid grid-cols-2 gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-3 lg:grid-cols-6"
+      className="grid grid-cols-1 gap-3 rounded-card border border-line bg-white p-4 min-[400px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-6"
     >
       <Field label="ค้นหา" htmlFor="q">
         <Input id="q" name="q" defaultValue={values.q ?? ''} placeholder="ชื่อ, บริษัท, อีเมล" />
@@ -86,8 +86,8 @@ export function LeadFilters({ values, users, companies }: LeadFiltersProps) {
       </Field>
       <div className="col-span-full flex items-center gap-3">
         <Button type="submit">กรอง</Button>
-        <Link href="/leads" className="text-sm text-slate-500 hover:underline">
-          Reset
+        <Link href="/leads" className="text-sm font-semibold text-primary-2 hover:underline">
+          ล้างตัวกรอง
         </Link>
       </div>
     </form>

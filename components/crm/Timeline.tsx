@@ -87,29 +87,33 @@ export function Timeline({ leadId, initial, canRetry }: TimelineProps) {
     <div className="flex flex-col gap-3">
       {displayItems.map((item) =>
         item.kind === 'activity' ? (
-          <div key={item.id} className="rounded-md border border-slate-200 bg-white p-3 text-sm">
-            <div className="mb-1 flex items-center justify-between text-xs text-slate-500">
+          <div key={item.id} className="rounded-card border border-line bg-white p-3 text-sm">
+            <div className="mb-1 flex items-center justify-between text-xs text-muted">
               <span suppressHydrationWarning>{formatDateTime(item.at)}</span>
               <Badge tone="gray">{item.type}</Badge>
             </div>
             <div>
-              <p className="text-slate-700">{activityMetaLine(item) ?? item.body ?? '-'}</p>
-              <p className="mt-1 text-xs text-slate-400">{item.actor ? item.actor.name : 'system'}</p>
+              <p className="text-ink-2">{activityMetaLine(item) ?? item.body ?? '-'}</p>
+              <p className="mt-1 text-xs text-muted">{item.actor ? item.actor.name : 'system'}</p>
             </div>
           </div>
         ) : (
           <MessageBubble key={item.id} message={item} canRetry={canRetry} />
         ),
       )}
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? (
+        <p role="alert" className="text-sm text-danger">
+          {error}
+        </p>
+      ) : null}
       {nextCursor ? (
         <button
           type="button"
           onClick={handleLoadMore}
           disabled={loading}
-          className="self-start text-sm text-slate-500 hover:underline disabled:opacity-50"
+          className="self-start min-h-6 text-sm font-semibold text-primary-2 hover:underline disabled:opacity-50"
         >
-          {loading ? 'กำลังโหลด...' : 'Load more'}
+          {loading ? 'กำลังโหลด...' : 'โหลดเพิ่ม'}
         </button>
       ) : null}
     </div>

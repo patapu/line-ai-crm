@@ -12,13 +12,21 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <>
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-2 focus:z-50 focus:rounded-full focus:bg-white focus:px-4 focus:py-2 focus:text-primary focus-visible:outline-white"
+      >
+        ข้ามไปยังเนื้อหาหลัก
+      </a>
       <NavBar name={session.name} role={session.role} />
       {getEnv().LINE_MODE === 'mock' ? (
-        <div className="bg-amber-50 px-4 py-2 text-center text-xs text-amber-800">
+        <div className="bg-warning-soft px-4 py-2 text-center text-sm text-warning">
           LINE mock mode: ข้อความ LINE ทั้งหมดจำลองการทำงาน ไม่ได้ส่งจริง
         </div>
       ) : null}
-      <main className="mx-auto max-w-7xl p-4">{children}</main>
+      <main id="main" tabIndex={-1} className="mx-auto max-w-7xl p-4 focus:outline-none">
+        {children}
+      </main>
     </>
   )
 }

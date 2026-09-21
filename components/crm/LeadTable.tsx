@@ -11,36 +11,36 @@ export interface LeadTableProps {
 
 export function LeadTable({ items }: LeadTableProps) {
   return (
-    <Table>
+    <Table label="ตาราง Lead">
       <thead>
-        <tr className="border-b border-slate-200 text-xs uppercase text-slate-500">
-          <th className="px-3 py-2">Title</th>
-          <th className="px-3 py-2">Contact</th>
-          <th className="px-3 py-2">Company</th>
-          <th className="px-3 py-2">Owner</th>
-          <th className="px-3 py-2">Stage</th>
-          <th className="px-3 py-2">Value</th>
-          <th className="px-3 py-2">Updated</th>
+        <tr className="border-b border-line bg-surface text-xs font-semibold text-muted">
+          <th scope="col" className="px-3 py-2">Title</th>
+          <th scope="col" className="px-3 py-2">Contact</th>
+          <th scope="col" className="px-3 py-2">Company</th>
+          <th scope="col" className="px-3 py-2">Owner</th>
+          <th scope="col" className="px-3 py-2">Stage</th>
+          <th scope="col" className="px-3 py-2">Value</th>
+          <th scope="col" className="px-3 py-2">Updated</th>
         </tr>
       </thead>
       <tbody>
         {items.map((lead) => (
-          <tr key={lead.id} className="border-b border-slate-100 last:border-0">
+          <tr key={lead.id} className="border-b border-neutral-soft last:border-0 hover:bg-surface">
             <td className="px-3 py-2">
-              <Link href={`/leads/${lead.id}`} className="font-medium text-slate-900 hover:underline">
+              <Link href={`/leads/${lead.id}`} className="font-semibold text-primary-2 hover:underline">
                 {lead.title}
               </Link>
             </td>
-            <td className="px-3 py-2 text-slate-600">{fullName(lead.contact.firstName, lead.contact.lastName)}</td>
-            <td className="px-3 py-2 text-slate-600">{lead.company?.name ?? '-'}</td>
-            <td className="px-3 py-2 text-slate-600">{lead.owner.name}</td>
+            <td className="px-3 py-2 text-muted">{fullName(lead.contact.firstName, lead.contact.lastName)}</td>
+            <td className="px-3 py-2 text-muted">{lead.company?.name ?? '-'}</td>
+            <td className="px-3 py-2 text-muted">{lead.owner.name}</td>
             <td className="px-3 py-2">
               <StageBadge stage={lead.stage} />
             </td>
-            <td className="px-3 py-2 text-slate-600">
+            <td className="px-3 py-2 text-muted">
               {lead.value !== null ? formatMoney(lead.value, lead.currency) : '-'}
             </td>
-            <td className="px-3 py-2 text-slate-500">{formatDateTime(lead.updatedAt)}</td>
+            <td className="px-3 py-2 text-muted">{formatDateTime(lead.updatedAt)}</td>
           </tr>
         ))}
       </tbody>

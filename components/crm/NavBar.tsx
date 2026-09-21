@@ -1,5 +1,5 @@
 // OWNER: lane A — server component
-import Link from 'next/link'
+import { NavLinks } from '@/components/crm/NavLinks'
 import { LogoutButton } from '@/components/crm/LogoutButton'
 
 export interface NavBarProps {
@@ -16,18 +16,16 @@ const LINKS = [
 
 export function NavBar({ name, role }: NavBarProps) {
   return (
-    <header className="border-b border-slate-200 bg-white">
+    <header className="bg-primary text-white">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 p-4">
-        <nav className="flex flex-wrap items-center gap-4">
-          <span className="text-sm font-semibold text-slate-900">LINE AI CRM</span>
-          {LINKS.map((link) => (
-            <Link key={link.href} href={link.href} className="text-sm text-slate-600 hover:text-slate-900">
-              {link.label}
-            </Link>
-          ))}
-        </nav>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-base font-bold text-white">LINE AI CRM</span>
+          <nav aria-label="เมนูหลัก" className="flex flex-wrap items-center gap-2">
+            <NavLinks links={LINKS} />
+          </nav>
+        </div>
         <div className="flex items-center gap-3">
-          <span className="text-sm text-slate-500">
+          <span className="text-sm text-white">
             {name} ({role})
           </span>
           <LogoutButton />

@@ -1,9 +1,12 @@
 // OWNER: lane A — Server Component
+import type { Metadata } from 'next'
 import { getActor } from '@/lib/auth/dal'
 import { getContact, listCompanyOptions, listUsers } from '@/modules/crm/service'
 import { IdSchema } from '@/lib/contracts/common'
 import { LeadForm } from '@/components/crm/LeadForm'
 import type { ContactPickerOption } from '@/components/crm/ContactPicker'
+
+export const metadata: Metadata = { title: 'สร้าง Lead ใหม่' }
 
 export default async function NewLeadPage(props: PageProps<'/leads/new'>) {
   const actor = await getActor()
@@ -26,7 +29,7 @@ export default async function NewLeadPage(props: PageProps<'/leads/new'>) {
 
   return (
     <div className="mx-auto flex max-w-xl flex-col gap-4">
-      <h1 className="text-lg font-semibold text-slate-900">สร้าง Lead ใหม่</h1>
+      <h1 className="text-xl font-bold text-primary-2">สร้าง Lead ใหม่</h1>
       <LeadForm
         mode="create"
         users={users}

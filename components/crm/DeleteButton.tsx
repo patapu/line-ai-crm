@@ -43,7 +43,7 @@ export function DeleteButton({ url, redirectTo, confirmText }: DeleteButtonProps
       <Button variant="danger" size="sm" onClick={handleClick} disabled={submitting}>
         ลบ
       </Button>
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <p className="text-sm text-danger">{error}</p> : null}
     </div>
   )
 }

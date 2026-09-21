@@ -20,7 +20,7 @@ export function LogoutButton() {
   }
 
   return (
-    <Button variant="ghost" size="sm" onClick={handleClick}>
+    <Button variant="inverse" size="sm" onClick={handleClick}>
       ออกจากระบบ
     </Button>
   )

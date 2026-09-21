@@ -59,7 +59,7 @@ export function ActivityForm({ leadId }: ActivityFormProps) {
         required
         maxLength={4000}
       />
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <p className="text-sm text-danger">{error}</p> : null}
       <Button type="submit" size="sm" disabled={submitting}>
         บันทึกกิจกรรม
       </Button>
