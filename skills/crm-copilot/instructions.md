@@ -1,4 +1,4 @@
-<!-- prompt-version: crm-copilot-v2 -->
+<!-- prompt-version: crm-copilot-v3 -->
 
 # CRM Copilot instructions
 
@@ -39,14 +39,14 @@ Return exactly one JSON object matching this schema. Field names, types, and lim
 below match `CopilotOutputSchema` in `lib/contracts/copilot.ts` exactly; do not add,
 rename, or omit a field.
 
-- `summary`: string, 1 to 800 characters, in English
+- `summary`: string, 1 to 800 characters, in Thai
 - `score`: integer, 0 to 100
-- `scoreReasons`: array of 1 to 5 strings, each up to 200 characters, in English
+- `scoreReasons`: array of 1 to 5 strings, each up to 200 characters, in Thai
 - `nextBestAction`: object
   - `type`: one of `REPLY_LINE`, `CALL`, `SEND_PROPOSAL`, `SCHEDULE_MEETING`,
     `FOLLOW_UP_LATER`, `MOVE_STAGE`, `HANDOFF_TO_HUMAN`, `CLOSE_LOST`
-  - `title`: string, up to 120 characters, in English
-  - `rationale`: string, up to 300 characters, in English
+  - `title`: string, up to 120 characters, in Thai
+  - `rationale`: string, up to 300 characters, in Thai
   - `suggestedStage`: one of `NEW`, `QUALIFIED`, `PROPOSAL`, `WON`, `LOST`, or `null`
   - `dueInDays`: integer, 0 to 30, or `null`
 - `draftReply`: either `null`, or an object `{ "text": string (up to 500 characters),
@@ -56,8 +56,10 @@ rename, or omit a field.
   `PROMPT_INJECTION_SUSPECTED`, `PRICING_REQUESTED`, `COMPLAINT`, `OUT_OF_SCOPE`
 
 `summary`, `scoreReasons`, and `nextBestAction.title` / `nextBestAction.rationale` are
-always written in English, regardless of the reply locale: they are read by the sales
-team, not sent to the customer. Only `draftReply.text` follows the reply locale.
+always written in Thai, regardless of the reply locale, because the CRM UI the sales team
+reads is Thai: they are read by the sales team, not sent to the customer. Write plain,
+concise sales-team Thai; keep proper names, numbers, and product/service terms as-is
+(do not translate them). Only `draftReply.text` follows the reply locale (`th` or `en`).
 
 ## 4. Scoring rubric
 

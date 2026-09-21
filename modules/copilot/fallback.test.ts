@@ -92,7 +92,7 @@ describe('ruleBasedSuggestion: base score per stage', () => {
     const ctx = makeCtx({ lead: { ...makeCtx().lead, stage } })
     const out = ruleBasedSuggestion(ctx)
     expect(out.score).toBe(base)
-    expect(out.scoreReasons[0]).toBe(`Stage ${stage}: base score ${base}`)
+    expect(out.scoreReasons[0]).toBe(`stage ${stage}: คะแนนพื้นฐาน ${base}`)
   })
 })
 
@@ -101,35 +101,35 @@ describe('ruleBasedSuggestion: recency and value adjustments', () => {
     const ctx = makeCtx({ recentMessages: [inbound('สวัสดีค่ะ', 2)] })
     const out = ruleBasedSuggestion(ctx)
     expect(out.score).toBe(45 + 15)
-    expect(out.scoreReasons).toContain('Customer messaged in the last 3 days (+15)')
+    expect(out.scoreReasons).toContain('ลูกค้าส่งข้อความมาภายใน 3 วันที่ผ่านมา (+15)')
   })
 
   it('does not add +15 for an inbound message 4 days ago', () => {
     const ctx = makeCtx({ recentMessages: [inbound('สวัสดีค่ะ', 4)] })
     const out = ruleBasedSuggestion(ctx)
     expect(out.score).toBe(45)
-    expect(out.scoreReasons).not.toContain('Customer messaged in the last 3 days (+15)')
+    expect(out.scoreReasons).not.toContain('ลูกค้าส่งข้อความมาภายใน 3 วันที่ผ่านมา (+15)')
   })
 
   it('never counts an outbound message towards the recent-engagement bonus', () => {
     const ctx = makeCtx({ recentMessages: [outbound('สวัสดีค่ะ', 1)] })
     const out = ruleBasedSuggestion(ctx)
     expect(out.score).toBe(45)
-    expect(out.scoreReasons).not.toContain('Customer messaged in the last 3 days (+15)')
+    expect(out.scoreReasons).not.toContain('ลูกค้าส่งข้อความมาภายใน 3 วันที่ผ่านมา (+15)')
   })
 
   it('adds +10 when lead.value is set', () => {
     const ctx = makeCtx({ lead: { ...makeCtx().lead, value: 45000 } })
     const out = ruleBasedSuggestion(ctx)
     expect(out.score).toBe(45 + 10)
-    expect(out.scoreReasons).toContain('Deal value is set (+10)')
+    expect(out.scoreReasons).toContain('มีการระบุมูลค่าดีลแล้ว (+10)')
   })
 
   it('subtracts 15 when there has been no activity for more than 14 days', () => {
     const ctx = makeCtx({ recentMessages: [outbound('เมื่อนานมาแล้ว', 20)] })
     const out = ruleBasedSuggestion(ctx)
     expect(out.score).toBe(45 - 15)
-    expect(out.scoreReasons.some((r) => r.includes('No activity for'))).toBe(true)
+    expect(out.scoreReasons.some((r) => r.includes('ไม่มีความเคลื่อนไหวมา'))).toBe(true)
   })
 
   it('falls back to lead.createdAt as the last touch when there are no messages or activities', () => {
@@ -737,7 +737,7 @@ describe('suggestWithFallback: last-resort output is built fresh each call (S17/
 
     expect(second.scoreReasons).not.toContain('mutated by test')
     expect(second.flags).not.toContain('PRICING_REQUESTED')
-    expect(second.summary).toBe('AI suggestion unavailable right now.')
+    expect(second.summary).toBe('คำแนะนำจาก AI ไม่พร้อมใช้งานในขณะนี้')
   })
 })
 

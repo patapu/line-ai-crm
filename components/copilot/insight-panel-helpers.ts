@@ -1,10 +1,12 @@
 import type { ApprovedMessageView, SuggestionView } from '@/modules/copilot/service'
+import type { CopilotOutput } from '@/lib/contracts/copilot'
 import type { BadgeTone } from '@/components/ui/Badge'
 
 // [B] components/copilot/insight-panel-helpers.ts: lane owned, pure. No
 // React, no server imports (this file also has to be importable from a
 // colocated test with no DOM tooling, see docs/design.md section 9 / the S4
-// plan's G8). `import type` only from ./service and ui/Badge: at runtime
+// plan's G8). `import type` only from ./service, ui/Badge, and
+// lib/contracts/copilot (frozen; type-only, for SuggestionFlag): at runtime
 // this module pulls in nothing from the copilot/db stack or the component
 // tree, only shapes.
 
@@ -98,6 +100,22 @@ export const SUGGESTION_SOURCE_LABEL: Record<SuggestionSource, string> = {
   FALLBACK: 'กฎสำรอง',
 }
 
+/** The flags a suggestion can carry, sourced from `CopilotOutputSchema.flags` (lib/contracts/copilot.ts, frozen; imported as a type only). */
+export type SuggestionFlag = CopilotOutput['flags'][number]
+
+export const FLAG_LABEL: Record<SuggestionFlag, string> = {
+  INSUFFICIENT_CONTEXT: 'ข้อมูลยังไม่พอให้ AI ประเมิน',
+  PROMPT_INJECTION_SUSPECTED: 'ข้อความลูกค้าอาจพยายามสั่งงาน AI',
+  PRICING_REQUESTED: 'ลูกค้าถามเรื่องราคา',
+  COMPLAINT: 'ลูกค้าร้องเรียน',
+  OUT_OF_SCOPE: 'คำถามอยู่นอกขอบเขตงานขาย',
+}
+
+/** Thai label for a suggestion flag; falls back to the raw value for anything not in FLAG_LABEL (e.g. a flag added server-side before this map is updated). */
+export function flagLabel(flag: string): string {
+  return (FLAG_LABEL as Record<string, string>)[flag] ?? flag
+}
+
 /**
  * `ApprovedMessageView['status']` mirrors the full `Message['status']` enum
  * (schema.prisma's MessageStatus), but the approve flow only ever produces
@@ -109,7 +127,7 @@ export const SUGGESTION_SOURCE_LABEL: Record<SuggestionSource, string> = {
  */
 export const MESSAGE_STATUS_TEXT: Record<MessageStatus, string> = {
   SENT: 'ส่งข้อความทาง LINE แล้ว',
-  QUEUED: 'ข้อความอยู่ในคิวรอส่งทาง LINE หากยังไม่ถูกส่งภายในประมาณ 1 นาที กดปุ่ม "Retry" ได้จาก Timeline ของ lead นี้',
+  QUEUED: 'ข้อความอยู่ในคิวรอส่งทาง LINE หากยังไม่ถูกส่งภายในประมาณ 1 นาที กดปุ่ม "ส่งอีกครั้ง" ได้จาก Timeline ของ lead นี้',
   FAILED: 'ส่งข้อความทาง LINE ไม่สำเร็จ ลองส่งใหม่ได้จาก Timeline ของ lead นี้',
   RECEIVED: 'บันทึกข้อความแล้ว',
   LOGGED: 'บันทึกข้อความแล้ว',

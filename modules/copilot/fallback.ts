@@ -39,36 +39,36 @@ type NextBestAction = CopilotOutput['nextBestAction']
 const NEXT_BEST_ACTION_BY_STAGE: Record<LeadContext['lead']['stage'], (hasLine: boolean) => NextBestAction> = {
   NEW: (hasLine) => ({
     type: hasLine ? 'REPLY_LINE' : 'CALL',
-    title: 'Make first contact and qualify needs',
-    rationale: 'New lead: confirm needs, budget and timeline first.',
+    title: 'ติดต่อลูกค้าครั้งแรกและประเมินความต้องการ',
+    rationale: 'lead ใหม่: สอบถามความต้องการ งบประมาณ และกรอบเวลาก่อน',
     suggestedStage: null,
     dueInDays: 1,
   }),
   QUALIFIED: () => ({
     type: 'SEND_PROPOSAL',
-    title: 'Send a proposal',
-    rationale: 'Lead is qualified: a written proposal is the next step.',
+    title: 'ส่งใบเสนอราคา',
+    rationale: 'lead ผ่านการคัดกรองแล้ว: ขั้นตอนต่อไปคือส่งใบเสนอราคาเป็นลายลักษณ์อักษร',
     suggestedStage: 'PROPOSAL',
     dueInDays: 3,
   }),
   PROPOSAL: () => ({
     type: 'CALL',
-    title: 'Call to follow up on the proposal',
-    rationale: 'A proposal is out: a call surfaces objections early.',
+    title: 'โทรติดตามผลใบเสนอราคา',
+    rationale: 'ส่งใบเสนอราคาไปแล้ว: การโทรช่วยจับข้อโต้แย้งของลูกค้าได้เร็วขึ้น',
     suggestedStage: null,
     dueInDays: 2,
   }),
   WON: () => ({
     type: 'FOLLOW_UP_LATER',
-    title: 'Check in after onboarding',
-    rationale: 'Deal is won: keep the relationship warm.',
+    title: 'ติดตามหลังเริ่มใช้งาน',
+    rationale: 'ปิดการขายสำเร็จแล้ว: รักษาความสัมพันธ์กับลูกค้าให้อบอุ่นต่อไป',
     suggestedStage: null,
     dueInDays: 14,
   }),
   LOST: () => ({
     type: 'FOLLOW_UP_LATER',
-    title: 'Leave the door open, no sales push',
-    rationale: 'Deal is lost: a light check-in later, without pressure.',
+    title: 'เปิดโอกาสไว้ ไม่กดดันขาย',
+    rationale: 'ปิดการขายไม่สำเร็จ: ติดตามเบาๆ ภายหลัง โดยไม่กดดันลูกค้า',
     suggestedStage: null,
     dueInDays: 30,
   }),
@@ -112,19 +112,19 @@ export function ruleBasedSuggestion(ctx: LeadContext): CopilotOutput {
   const base = BASE_SCORE_BY_STAGE[stage]
 
   let score = base
-  const scoreReasons: string[] = [`Stage ${stage}: base score ${base}`]
+  const scoreReasons: string[] = [`stage ${stage}: คะแนนพื้นฐาน ${base}`]
 
   const recentInbound = ctx.recentMessages.some(
     (m) => m.direction === 'INBOUND' && now - Date.parse(m.at) <= 3 * DAY_MS,
   )
   if (recentInbound) {
     score += 15
-    scoreReasons.push('Customer messaged in the last 3 days (+15)')
+    scoreReasons.push('ลูกค้าส่งข้อความมาภายใน 3 วันที่ผ่านมา (+15)')
   }
 
   if (ctx.lead.value !== null) {
     score += 10
-    scoreReasons.push('Deal value is set (+10)')
+    scoreReasons.push('มีการระบุมูลค่าดีลแล้ว (+10)')
   }
 
   const touches = [...ctx.recentMessages, ...ctx.recentActivities]
@@ -132,7 +132,7 @@ export function ruleBasedSuggestion(ctx: LeadContext): CopilotOutput {
   const daysSinceTouch = (now - Date.parse(lastTouch)) / DAY_MS
   if (daysSinceTouch > 14) {
     score -= 15
-    scoreReasons.push(`No activity for ${Math.floor(daysSinceTouch)} days (-15)`)
+    scoreReasons.push(`ไม่มีความเคลื่อนไหวมา ${Math.floor(daysSinceTouch)} วัน (-15)`)
   }
 
   score = clampScore(score)
@@ -143,7 +143,7 @@ export function ruleBasedSuggestion(ctx: LeadContext): CopilotOutput {
 
   const { firstName, lastName, companyName } = ctx.contact
   const { title, value, currency } = ctx.lead
-  const summary = `${firstName}${lastName ? ' ' + lastName : ''}${companyName ? ` (${companyName})` : ''}: lead "${title}" is at stage ${stage}${value !== null ? ` with value ${value.toLocaleString('en-US')} ${currency}` : ''}. ${ctx.recentMessages.length} recent message(s), ${lastInbound ? `last customer message ${lastInboundDays} day(s) ago` : 'no customer messages yet'}. Rule-based summary, the AI suggestion was unavailable.`.slice(
+  const summary = `${firstName}${lastName ? ' ' + lastName : ''}${companyName ? ` (${companyName})` : ''}: lead "${title}" อยู่ที่ stage ${stage}${value !== null ? ` มูลค่า ${value.toLocaleString('en-US')} ${currency}` : ''} มีข้อความล่าสุด ${ctx.recentMessages.length} รายการ ${lastInbound ? `ข้อความล่าสุดจากลูกค้าเมื่อ ${lastInboundDays} วันที่แล้ว` : 'ยังไม่มีข้อความจากลูกค้า'} สรุปโดยกฎสำรอง เนื่องจากคำแนะนำจาก AI ไม่พร้อมใช้งาน`.slice(
     0,
     800,
   )
@@ -273,13 +273,13 @@ function fallback(
 // never observe or mutate the same nextBestAction/scoreReasons/flags object.
 function buildLastResortOutput(): CopilotOutput {
   return {
-    summary: 'AI suggestion unavailable right now.',
+    summary: 'คำแนะนำจาก AI ไม่พร้อมใช้งานในขณะนี้',
     score: 0,
-    scoreReasons: ['AI suggestion unavailable right now.'],
+    scoreReasons: ['คำแนะนำจาก AI ไม่พร้อมใช้งานในขณะนี้'],
     nextBestAction: {
       type: 'FOLLOW_UP_LATER',
-      title: 'Follow up later',
-      rationale: 'AI suggestion unavailable right now.',
+      title: 'ติดตามภายหลัง',
+      rationale: 'คำแนะนำจาก AI ไม่พร้อมใช้งานในขณะนี้',
       suggestedStage: null,
       dueInDays: null,
     },
