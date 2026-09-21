@@ -25,7 +25,7 @@ export function NavBar({ name, role }: NavBarProps) {
         >
           <NavLinks links={LINKS} />
         </nav>
-        <span className="col-start-2 row-start-1 min-w-0 justify-self-end truncate text-xs text-white md:max-w-60 md:text-sm">
+        <span className="col-start-2 row-start-1 min-w-0 max-w-full justify-self-end truncate text-xs text-white md:max-w-60 md:text-sm">
           {name}
           <span className="max-sm:hidden"> ({role})</span>
         </span>
