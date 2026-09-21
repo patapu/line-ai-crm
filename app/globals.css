@@ -49,3 +49,15 @@
     outline-offset: 2px;
   }
 }
+
+@media (width >= 64rem) {
+  @supports selector(::details-content) {
+    .lead-edit-disclosure > summary {
+      display: none;
+    }
+    .lead-edit-disclosure::details-content {
+      content-visibility: visible;
+      display: block;
+    }
+  }
+}
