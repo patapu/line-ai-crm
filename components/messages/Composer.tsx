@@ -8,6 +8,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { readErrorMessage } from '@/components/messages/errors'
+import { Button } from '@/components/ui/Button'
 
 export interface ComposerProps {
   leadId: string
@@ -38,16 +39,19 @@ export function Composer({ leadId, canSend, hasLine }: ComposerProps) {
   const [pending, setPending] = useState(false)
   const [notice, setNotice] = useState<Notice>(null)
 
+  const textFieldId = `composer-text-${leadId}`
+
   if (!canSend) {
     return (
       <div className="space-y-2">
         <textarea
           disabled
           maxLength={1000}
-          className="w-full rounded border border-slate-200 bg-slate-50 p-2 text-sm text-slate-400"
-          placeholder="You cannot send messages on this lead."
+          aria-label="ข้อความ"
+          className="w-full rounded border border-field-border bg-slate-50 p-2 text-sm text-slate-400"
+          placeholder="คุณไม่มีสิทธิ์ส่งข้อความใน lead นี้"
         />
-        <p className="text-xs text-slate-500">Only the lead owner or an admin can send messages.</p>
+        <p className="text-xs text-muted">เฉพาะผู้ดูแล lead นี้หรือแอดมินเท่านั้นที่ส่งข้อความได้</p>
       </div>
     )
   }
@@ -74,7 +78,7 @@ export function Composer({ leadId, canSend, hasLine }: ComposerProps) {
       } catch {
         setNotice({
           kind: 'error',
-          text: 'Network error: the message may or may not have been sent. Check the conversation before sending again.',
+          text: 'เครือข่ายขัดข้อง ข้อความอาจส่งไปแล้วหรือยังไม่ได้ส่ง ตรวจดูใน Timeline ก่อนส่งซ้ำ',
         })
         return
       }
@@ -90,13 +94,15 @@ export function Composer({ leadId, canSend, hasLine }: ComposerProps) {
       if (message?.status === 'FAILED') {
         setNotice({
           kind: 'warn',
-          text: `Not delivered (${message.lastError}). Use Retry on the message.`,
+          text: message.lastError
+            ? `ส่งไม่สำเร็จ (${message.lastError}) กด "ส่งอีกครั้ง" ที่ข้อความนั้นใน Timeline`
+            : `ส่งไม่สำเร็จ กด "ส่งอีกครั้ง" ที่ข้อความนั้นใน Timeline`,
         })
         setText('')
         return
       }
       setText('')
-      setNotice({ kind: 'ok', text: message?.status === 'LOGGED' ? 'Logged.' : 'Sent.' })
+      setNotice({ kind: 'ok', text: message?.status === 'LOGGED' ? 'บันทึกข้อความแล้ว' : 'ส่งทาง LINE แล้ว' })
     } finally {
       setPending(false)
       router.refresh()
@@ -105,7 +111,8 @@ export function Composer({ leadId, canSend, hasLine }: ComposerProps) {
 
   return (
     <div className="space-y-2">
-      <div className="flex gap-4 text-sm">
+      <fieldset className="flex items-center gap-4 text-sm">
+        <legend className="text-xs text-muted">ช่องทาง</legend>
         <label className="flex items-center gap-1">
           <input
             type="radio"
@@ -123,13 +130,16 @@ export function Composer({ leadId, canSend, hasLine }: ComposerProps) {
             checked={mode === 'MANUAL'}
             onChange={() => setMode('MANUAL')}
           />
-          Manual
+          บันทึกเอง
         </label>
-      </div>
-      {!hasLine && <p className="text-xs text-slate-500">This contact has no LINE account linked.</p>}
+      </fieldset>
+      {!hasLine && (
+        <p className="text-xs text-muted">ผู้ติดต่อนี้ยังไม่ได้เชื่อมบัญชี LINE จึงบันทึกข้อความเองได้อย่างเดียว</p>
+      )}
 
       {mode === 'MANUAL' && (
-        <div className="flex gap-4 text-sm">
+        <fieldset className="flex items-center gap-4 text-sm">
+          <legend className="text-xs text-muted">ทิศทาง</legend>
           <label className="flex items-center gap-1">
             <input
               type="radio"
@@ -137,7 +147,7 @@ export function Composer({ leadId, canSend, hasLine }: ComposerProps) {
               checked={direction === 'OUTBOUND'}
               onChange={() => setDirection('OUTBOUND')}
             />
-            Outbound
+            ส่งถึงลูกค้า
           </label>
           <label className="flex items-center gap-1">
             <input
@@ -146,40 +156,45 @@ export function Composer({ leadId, canSend, hasLine }: ComposerProps) {
               checked={direction === 'INBOUND'}
               onChange={() => setDirection('INBOUND')}
             />
-            Inbound
+            ลูกค้าส่งมา
           </label>
-        </div>
+        </fieldset>
       )}
 
+      <label htmlFor={textFieldId} className="text-xs text-muted">
+        ข้อความ
+      </label>
       <textarea
+        id={textFieldId}
         value={text}
         onChange={(e) => setText(e.target.value)}
         maxLength={1000}
         rows={3}
-        className="w-full rounded border border-slate-300 p-2 text-sm"
-        placeholder="Type a message..."
+        className="w-full rounded border border-field-border p-2 text-sm"
+        placeholder="พิมพ์ข้อความถึงลูกค้า"
       />
-      <div className="flex items-center justify-between text-xs text-slate-500">
-        <span>{text.length}/1000</span>
-        <button
-          type="button"
-          disabled={submitDisabled}
-          onClick={handleSubmit}
-          className="rounded bg-slate-900 px-3 py-1 text-sm text-white disabled:opacity-40"
-        >
-          {pending ? 'Sending...' : 'Send'}
-        </button>
+      <div className="flex items-center justify-between text-xs text-muted">
+        <span>{text.length}/1000 ตัวอักษร</span>
+        <Button type="button" variant="primary" size="sm" disabled={submitDisabled} onClick={handleSubmit}>
+          {mode === 'LINE'
+            ? pending
+              ? 'กำลังส่ง...'
+              : 'ส่งทาง LINE'
+            : pending
+              ? 'กำลังบันทึก...'
+              : 'บันทึกข้อความ'}
+        </Button>
       </div>
 
       {notice && (
         <p
-          role={notice.kind === 'error' ? 'alert' : undefined}
+          role={notice.kind === 'error' ? 'alert' : notice.kind === 'ok' ? 'status' : undefined}
           className={
             notice.kind === 'error'
-              ? 'text-xs text-red-600'
+              ? 'text-xs text-danger'
               : notice.kind === 'warn'
-                ? 'text-xs text-amber-600'
-                : 'text-xs text-green-600'
+                ? 'text-xs text-warning'
+                : 'text-xs text-success'
           }
         >
           {notice.text}

@@ -94,3 +94,26 @@ describe('MockLineClient push', () => {
     expect(client.sent).toHaveLength(1)
   })
 })
+
+describe('MockLineClient setProfileName', () => {
+  it('getProfile defaults to Mock-prefixed last 4 chars of the userId', async () => {
+    const client = new MockLineClient('secret-a')
+    const profile = await client.getProfile('Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxabcd')
+    expect(profile).toEqual({ userId: 'Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxabcd', displayName: 'Mock abcd' })
+  })
+
+  it('getProfile returns the name set by setProfileName', async () => {
+    const client = new MockLineClient('secret-a')
+    client.setProfileName('U1', 'สมชาย ใจดี')
+    const profile = await client.getProfile('U1')
+    expect(profile).toEqual({ userId: 'U1', displayName: 'สมชาย ใจดี' })
+  })
+
+  it('reset() restores the default Mock-prefixed name', async () => {
+    const client = new MockLineClient('secret-a')
+    client.setProfileName('U1', 'Custom Name')
+    client.reset()
+    const profile = await client.getProfile('U1')
+    expect(profile).toEqual({ userId: 'U1', displayName: 'Mock ' + 'U1'.slice(-4) })
+  })
+})

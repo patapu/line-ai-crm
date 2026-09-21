@@ -17,6 +17,7 @@ export class MockLineClient implements LineClient {
   private failures: PushFailure[] = []
   private acceptedRequestIds = new Map<string, string>()
   private counter = 0
+  private profileNames = new Map<string, string>()
 
   constructor(private readonly channelSecret: string) {}
 
@@ -62,8 +63,13 @@ export class MockLineClient implements LineClient {
     return { ok: true, httpStatus: 200, duplicate: false, requestId }
   }
 
+  /** Sets the displayName the next getProfile(userId) call returns, for tests and the simulate dev route. */
+  setProfileName(userId: string, displayName: string): void {
+    this.profileNames.set(userId, displayName)
+  }
+
   async getProfile(userId: string): Promise<LineProfile> {
-    return { userId, displayName: 'Mock ' + userId.slice(-4) }
+    return { userId, displayName: this.profileNames.get(userId) ?? 'Mock ' + userId.slice(-4) }
   }
 
   reset(): void {
@@ -71,5 +77,6 @@ export class MockLineClient implements LineClient {
     this.failures = []
     this.acceptedRequestIds.clear()
     this.counter = 0
+    this.profileNames.clear()
   }
 }
