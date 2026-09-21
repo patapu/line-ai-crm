@@ -34,68 +34,86 @@ export default async function LeadDetailPage(props: PageProps<'/leads/[id]'>) {
     : lead.contact.firstName
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-      <div className="flex flex-col gap-4 lg:col-span-2">
-        <Card>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h1 className="min-w-0 break-words text-xl font-bold text-primary-2">{lead.title}</h1>
-            <StageBadge stage={lead.stage} />
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:grid-rows-[auto_auto_1fr] lg:items-start">
+      <Card className="lg:col-span-2 lg:col-start-1 lg:row-start-1">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h1 className="min-w-0 break-words text-xl font-bold text-primary-2">{lead.title}</h1>
+          <StageBadge stage={lead.stage} />
+        </div>
+        <dl className="mt-3 grid grid-cols-2 gap-3 text-sm text-ink">
+          <div>
+            <dt className="text-xs font-semibold text-muted">Contact</dt>
+            <dd>
+              <Link href={`/contacts/${lead.contact.id}`} className="text-primary-2 hover:underline">
+                {contactName}
+              </Link>
+            </dd>
           </div>
-          <dl className="mt-3 grid grid-cols-2 gap-3 text-sm text-ink">
-            <div>
-              <dt className="text-xs font-semibold text-muted">Contact</dt>
-              <dd>
-                <Link href={`/contacts/${lead.contact.id}`} className="text-primary-2 hover:underline">
-                  {contactName}
+          <div>
+            <dt className="text-xs font-semibold text-muted">Company</dt>
+            <dd>
+              {lead.company ? (
+                <Link href={`/companies/${lead.company.id}`} className="text-primary-2 hover:underline">
+                  {lead.company.name}
                 </Link>
-              </dd>
+              ) : (
+                '-'
+              )}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs font-semibold text-muted">Owner</dt>
+            <dd>{lead.owner.name}</dd>
+          </div>
+          <div>
+            <dt className="text-xs font-semibold text-muted">มูลค่า</dt>
+            <dd>{lead.value !== null ? formatMoney(lead.value, lead.currency) : '-'}</dd>
+          </div>
+          <div>
+            <dt className="text-xs font-semibold text-muted">Score</dt>
+            <dd>{lead.score ?? '-'}</dd>
+          </div>
+          <div>
+            <dt className="text-xs font-semibold text-muted">อัปเดตล่าสุด</dt>
+            <dd>{formatDateTime(lead.updatedAt)}</dd>
+          </div>
+          {lead.lostReason ? (
+            <div className="col-span-2">
+              <dt className="text-xs font-semibold text-muted">เหตุผลที่ปิดไม่สำเร็จ</dt>
+              <dd>{lead.lostReason}</dd>
             </div>
-            <div>
-              <dt className="text-xs font-semibold text-muted">Company</dt>
-              <dd>
-                {lead.company ? (
-                  <Link href={`/companies/${lead.company.id}`} className="text-primary-2 hover:underline">
-                    {lead.company.name}
-                  </Link>
-                ) : (
-                  '-'
-                )}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs font-semibold text-muted">Owner</dt>
-              <dd>{lead.owner.name}</dd>
-            </div>
-            <div>
-              <dt className="text-xs font-semibold text-muted">มูลค่า</dt>
-              <dd>{lead.value !== null ? formatMoney(lead.value, lead.currency) : '-'}</dd>
-            </div>
-            <div>
-              <dt className="text-xs font-semibold text-muted">Score</dt>
-              <dd>{lead.score ?? '-'}</dd>
-            </div>
-            <div>
-              <dt className="text-xs font-semibold text-muted">อัปเดตล่าสุด</dt>
-              <dd>{formatDateTime(lead.updatedAt)}</dd>
-            </div>
-            {lead.lostReason ? (
-              <div className="col-span-2">
-                <dt className="text-xs font-semibold text-muted">เหตุผลที่ปิดไม่สำเร็จ</dt>
-                <dd>{lead.lostReason}</dd>
-              </div>
-            ) : null}
-          </dl>
-        </Card>
+          ) : null}
+        </dl>
+      </Card>
 
-        <Card>
-          <h2 className="mb-3 text-base font-semibold text-primary-2">เปลี่ยนสถานะ</h2>
-          <StageChanger leadId={lead.id} stage={lead.stage} canChange={canAct} />
-        </Card>
+      <Card className="lg:col-span-2 lg:col-start-1 lg:row-start-2">
+        <h2 className="mb-3 text-base font-semibold text-primary-2">เปลี่ยนสถานะ</h2>
+        <StageChanger leadId={lead.id} stage={lead.stage} canChange={canAct} />
+      </Card>
 
+      <div className="flex flex-col gap-4 lg:col-start-3 lg:row-start-1 lg:row-span-3">
+        <InsightPanel leadId={lead.id} canApprove={canAct} />
+        <section aria-labelledby="composer-title">
+          <Card>
+            <h2 id="composer-title" className="mb-3 text-base font-semibold text-primary-2">
+              ส่งข้อความถึงลูกค้า
+            </h2>
+            <Composer leadId={lead.id} canSend={canAct} hasLine={lead.contact.hasLine} />
+          </Card>
+        </section>
+      </div>
+
+      <div className="flex flex-col gap-4 lg:col-span-2 lg:col-start-1 lg:row-start-3">
         {canAct ? (
           <Card>
-            <h2 className="mb-3 text-base font-semibold text-primary-2">แก้ไข Lead</h2>
-            <LeadForm mode="edit" lead={lead} users={users} companies={companies} canReassign={actor.role === 'ADMIN'} />
+            <details className="lead-edit-disclosure group">
+              <summary className="inline-flex min-h-11 cursor-pointer items-center text-sm font-semibold text-primary-2">
+                <span className="group-open:hidden">เปิดฟอร์มแก้ไข</span>
+                <span className="hidden group-open:inline">ซ่อนฟอร์มแก้ไข</span>
+              </summary>
+              <h2 className="mb-3 mt-3 text-base font-semibold text-primary-2">แก้ไข Lead</h2>
+              <LeadForm mode="edit" lead={lead} users={users} companies={companies} canReassign={actor.role === 'ADMIN'} />
+            </details>
           </Card>
         ) : null}
 
@@ -108,11 +126,6 @@ export default async function LeadDetailPage(props: PageProps<'/leads/[id]'>) {
           <h2 className="mb-3 text-base font-semibold text-primary-2">Timeline</h2>
           <Timeline key={timeline.items[0]?.id ?? 'empty'} leadId={id} initial={timeline} canRetry={canAct} />
         </div>
-      </div>
-
-      <div className="flex flex-col gap-4">
-        <InsightPanel leadId={lead.id} canApprove={canAct} />
-        <Composer leadId={lead.id} canSend={canAct} hasLine={lead.contact.hasLine} />
       </div>
     </div>
   )
