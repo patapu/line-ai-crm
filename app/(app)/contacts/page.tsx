@@ -1,5 +1,6 @@
 // OWNER: lane A — Server Component
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { getActor } from '@/lib/auth/dal'
 import { listCompanyOptions, listContacts } from '@/modules/crm/service'
 import { queryObject } from '@/modules/crm/repository'
@@ -39,11 +40,13 @@ export default async function ContactsPage(props: PageProps<'/contacts'>) {
       <form
         method="get"
         action="/contacts"
-        className="grid grid-cols-1 gap-3 rounded-card border border-line bg-white p-4 min-[400px]:grid-cols-2 sm:grid-cols-4"
+        className="grid grid-cols-1 gap-3 rounded-card border border-line bg-white p-4 min-[340px]:grid-cols-2 sm:grid-cols-4"
       >
-        <Field label="ค้นหา" htmlFor="q">
-          <Input id="q" name="q" defaultValue={values.q ?? ''} placeholder="ชื่อ, อีเมล, เบอร์โทร" />
-        </Field>
+        <div className="col-span-full sm:col-span-1">
+          <Field label="ค้นหา" htmlFor="q">
+            <Input id="q" name="q" defaultValue={values.q ?? ''} placeholder="ชื่อ, อีเมล, เบอร์โทร" />
+          </Field>
+        </div>
         <Field label="บริษัท" htmlFor="companyId">
           <Select id="companyId" name="companyId" defaultValue={values.companyId ?? ''}>
             <option value="">ทั้งหมด</option>
@@ -61,8 +64,11 @@ export default async function ContactsPage(props: PageProps<'/contacts'>) {
             <option value="false">ไม่มี LINE</option>
           </Select>
         </Field>
-        <div className="col-span-full">
+        <div className="col-span-full flex flex-wrap items-center gap-3">
           <Button type="submit">กรอง</Button>
+          <Link href="/contacts" className="text-sm font-semibold text-primary-2 hover:underline">
+            ล้างตัวกรอง
+          </Link>
         </div>
       </form>
       {page.items.length === 0 ? (

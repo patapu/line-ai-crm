@@ -11,9 +11,9 @@ export interface LeadTableProps {
 
 export function LeadTable({ items }: LeadTableProps) {
   return (
-    <Table label="ตาราง Lead">
+    <Table label="ตาราง Lead" minWidth="md">
       <thead>
-        <tr className="border-b border-line bg-surface text-xs font-semibold text-muted">
+        <tr className="border-b border-line bg-surface text-xs font-semibold text-muted whitespace-nowrap">
           <th scope="col" className="px-3 py-2">Title</th>
           <th scope="col" className="px-3 py-2">Contact</th>
           <th scope="col" className="px-3 py-2">Company</th>
@@ -25,9 +25,9 @@ export function LeadTable({ items }: LeadTableProps) {
       </thead>
       <tbody>
         {items.map((lead) => (
-          <tr key={lead.id} className="border-b border-neutral-soft last:border-0 hover:bg-surface">
-            <td className="px-3 py-2">
-              <Link href={`/leads/${lead.id}`} className="font-semibold text-primary-2 hover:underline">
+          <tr key={lead.id} className="border-b border-neutral-soft last:border-0 hover:bg-surface whitespace-nowrap">
+            <td className="px-3 py-2 whitespace-normal">
+              <Link href={`/leads/${lead.id}`} className="block min-w-40 max-w-64 break-words font-semibold text-primary-2 hover:underline">
                 {lead.title}
               </Link>
             </td>

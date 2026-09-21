@@ -1,5 +1,6 @@
 // OWNER: lane A — Server Component
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { getActor } from '@/lib/auth/dal'
 import { listCompanies } from '@/modules/crm/service'
 import { CompanyListQuery, queryObject } from '@/modules/crm/repository'
@@ -37,13 +38,18 @@ export default async function CompaniesPage(props: PageProps<'/companies'>) {
       <form
         method="get"
         action="/companies"
-        className="grid grid-cols-1 gap-3 rounded-card border border-line bg-white p-4 min-[400px]:grid-cols-2 sm:grid-cols-4"
+        className="flex flex-wrap items-end gap-3 rounded-card border border-line bg-white p-4"
       >
-        <Field label="ค้นหา" htmlFor="q">
-          <Input id="q" name="q" defaultValue={values.q ?? ''} placeholder="ชื่อบริษัท, domain" />
-        </Field>
-        <div className="col-span-full">
+        <div className="min-w-0 flex-[1_1_14rem]">
+          <Field label="ค้นหา" htmlFor="q">
+            <Input id="q" name="q" defaultValue={values.q ?? ''} placeholder="ชื่อบริษัท, domain" />
+          </Field>
+        </div>
+        <div className="flex items-center gap-3">
           <Button type="submit">กรอง</Button>
+          <Link href="/companies" className="text-sm font-semibold text-primary-2 hover:underline">
+            ล้างตัวกรอง
+          </Link>
         </div>
       </form>
       {page.items.length === 0 ? (

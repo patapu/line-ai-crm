@@ -11,9 +11,9 @@ export interface ContactTableProps {
 
 export function ContactTable({ items }: ContactTableProps) {
   return (
-    <Table label="ตาราง Contact">
+    <Table label="ตาราง Contact" minWidth="md">
       <thead>
-        <tr className="border-b border-line bg-surface text-xs font-semibold text-muted">
+        <tr className="border-b border-line bg-surface text-xs font-semibold text-muted whitespace-nowrap">
           <th scope="col" className="px-3 py-2">Name</th>
           <th scope="col" className="px-3 py-2">Email</th>
           <th scope="col" className="px-3 py-2">Phone</th>
@@ -26,9 +26,9 @@ export function ContactTable({ items }: ContactTableProps) {
       </thead>
       <tbody>
         {items.map((contact) => (
-          <tr key={contact.id} className="border-b border-neutral-soft last:border-0 hover:bg-surface">
-            <td className="px-3 py-2">
-              <Link href={`/contacts/${contact.id}`} className="font-semibold text-primary-2 hover:underline">
+          <tr key={contact.id} className="border-b border-neutral-soft last:border-0 hover:bg-surface whitespace-nowrap">
+            <td className="px-3 py-2 whitespace-normal">
+              <Link href={`/contacts/${contact.id}`} className="block min-w-40 max-w-64 break-words font-semibold text-primary-2 hover:underline">
                 {fullName(contact.firstName, contact.lastName)}
               </Link>
             </td>

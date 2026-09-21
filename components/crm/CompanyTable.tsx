@@ -10,9 +10,9 @@ export interface CompanyTableProps {
 
 export function CompanyTable({ items }: CompanyTableProps) {
   return (
-    <Table label="ตารางบริษัท">
+    <Table label="ตารางบริษัท" minWidth="sm">
       <thead>
-        <tr className="border-b border-line bg-surface text-xs font-semibold text-muted">
+        <tr className="border-b border-line bg-surface text-xs font-semibold text-muted whitespace-nowrap">
           <th scope="col" className="px-3 py-2">Name</th>
           <th scope="col" className="px-3 py-2">Domain</th>
           <th scope="col" className="px-3 py-2">Industry</th>
@@ -24,9 +24,9 @@ export function CompanyTable({ items }: CompanyTableProps) {
       </thead>
       <tbody>
         {items.map((company) => (
-          <tr key={company.id} className="border-b border-neutral-soft last:border-0 hover:bg-surface">
-            <td className="px-3 py-2">
-              <Link href={`/companies/${company.id}`} className="font-semibold text-primary-2 hover:underline">
+          <tr key={company.id} className="border-b border-neutral-soft last:border-0 hover:bg-surface whitespace-nowrap">
+            <td className="px-3 py-2 whitespace-normal">
+              <Link href={`/companies/${company.id}`} className="block min-w-40 max-w-64 break-words font-semibold text-primary-2 hover:underline">
                 {company.name}
               </Link>
             </td>
