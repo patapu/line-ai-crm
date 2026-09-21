@@ -185,8 +185,77 @@ export async function recordFollow(
 }
 
 /**
- * Best effort only, meant to run inside scheduleAfter(). Never overwrites an
- * existing lineDisplayName, and never logs the display name itself.
+ * These literals are duplicated from lane A's modules/crm/service.ts
+ * (findOrCreateContactByLineUserId ~L196, findOrOpenLeadForContact ~L222).
+ * They must be kept in sync with that file if it ever changes. No CR exists
+ * yet asking lane A to export them for reuse here; that call needs Pakorn,
+ * and any CR entry in docs/contract-change-requests.md is lane E's to write.
+ */
+const CRM_PLACEHOLDER_FIRST_NAME = 'LINE user'
+const LEAD_TITLE_PREFIX = 'LINE: '
+const CRM_PLACEHOLDER_LEAD_TITLE = LEAD_TITLE_PREFIX + CRM_PLACEHOLDER_FIRST_NAME
+
+/**
+ * Zero-width, bidi-override and other invisible formatting characters that
+ * can be used to spoof or hide characters in a display name: zero-width
+ * space through right-to-left mark, the LRE/RLE/PDF/LRO/RLO bidi overrides,
+ * line/paragraph separator, word joiner and friends, and the BOM / zero-width
+ * no-break space. Built from numeric code points, never a literal \u escape
+ * or a raw invisible character in this source file, so the ranges stay exact
+ * and auditable.
+ */
+const INVISIBLE_BIDI_CODEPOINT_RANGES: ReadonlyArray<readonly [number, number]> = [
+  [0x200b, 0x200f],
+  [0x202a, 0x202e],
+  [0x2028, 0x2029],
+  [0x2060, 0x2069],
+  [0xfeff, 0xfeff],
+]
+
+function invisibleBidiCharClass(): string {
+  return INVISIBLE_BIDI_CODEPOINT_RANGES.map(([start, end]) =>
+    start === end ? String.fromCharCode(start) : String.fromCharCode(start) + '-' + String.fromCharCode(end),
+  ).join('')
+}
+
+/**
+ * C0/C1 controls plus the invisible/bidi characters above, as a regex
+ * character class (bracket contents only, no flags). Exported so
+ * app/api/dev/line/simulate/route.ts can reject the same set at input time;
+ * this is the single source of truth for that set so the two never drift.
+ */
+export const CONTROL_OR_INVISIBLE_CHAR_CLASS = '\\x00-\\x1F\\x7F-\\x9F' + invisibleBidiCharClass()
+
+const STRIP_TO_SPACE_RE = new RegExp('[' + CONTROL_OR_INVISIBLE_CHAR_CLASS + ']', 'g')
+const WHITESPACE_RUN_RE = /\s+/g
+const TRAILING_HIGH_SURROGATE_RE = /[\uD800-\uDBFF]$/
+
+/**
+ * Replaces (never deletes, so words do not run together) C0/C1 control
+ * characters and the invisible/bidi characters above with a single space,
+ * collapses runs of whitespace to one space, then trims. Caps to 100 UTF-16
+ * units (matching the Contact.firstName / lineDisplayName budget) and trims
+ * again after the cut. Drops a trailing lone high surrogate the cap may have
+ * split off, so the result never ends mid surrogate pair. Empty after
+ * cleanup -> null: no name worth writing.
+ */
+function normalizeDisplayName(raw: string): string | null {
+  const spaced = raw.replace(STRIP_TO_SPACE_RE, ' ').replace(WHITESPACE_RUN_RE, ' ').trim()
+  if (!spaced) return null
+  return spaced.slice(0, 100).replace(TRAILING_HIGH_SURROGATE_RE, '').trim()
+}
+
+/**
+ * Best effort only, meant to run inside scheduleAfter(). Reads the LINE
+ * profile once and uses the normalized display name to fill in whatever is
+ * still placeholder-shaped, never to overwrite something a human already
+ * edited:
+ *  - Contact.lineDisplayName, only while still null
+ *  - Contact.firstName, only while still CRM_PLACEHOLDER_FIRST_NAME
+ *  - the contact's open (non WON/LOST) Lead.title, only while still
+ *    CRM_PLACEHOLDER_LEAD_TITLE
+ * No Activity row: the schema is frozen and no ActivityType fits a profile
+ * backfill. Never logs the display name itself, only counts. Never throws.
  */
 export async function backfillContactProfile(
   db: Db,
@@ -196,13 +265,32 @@ export async function backfillContactProfile(
   try {
     const profile = await line.getProfile(input.lineUserId)
     if (!profile) return
-    await db.contact.updateMany({
-      where: { id: input.contactId, lineDisplayName: null },
-      data: { lineDisplayName: profile.displayName.slice(0, 100) },
+    const name = normalizeDisplayName(profile.displayName)
+    if (!name) return
+
+    const [displayNameResult, firstNameResult, leadTitleResult] = await db.$transaction([
+      db.contact.updateMany({
+        where: { id: input.contactId, lineDisplayName: null },
+        data: { lineDisplayName: name },
+      }),
+      db.contact.updateMany({
+        where: { id: input.contactId, firstName: CRM_PLACEHOLDER_FIRST_NAME },
+        data: { firstName: name },
+      }),
+      db.lead.updateMany({
+        where: { contactId: input.contactId, title: CRM_PLACEHOLDER_LEAD_TITLE, stage: { notIn: ['WON', 'LOST'] } },
+        data: { title: (LEAD_TITLE_PREFIX + name).slice(0, 200) },
+      }),
+    ])
+
+    log('debug', 'line.profile_backfilled', {
+      contactId: input.contactId,
+      displayNameSet: displayNameResult.count,
+      firstNameSet: firstNameResult.count,
+      leadTitlesSet: leadTitleResult.count,
     })
-    log('debug', 'line.profile_backfilled', { contactId: input.contactId })
   } catch {
-    // Best effort: getProfile and the update are both allowed to fail silently.
+    // Best effort: getProfile and the updates are both allowed to fail silently.
   }
 }
 

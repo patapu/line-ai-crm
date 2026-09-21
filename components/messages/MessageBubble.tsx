@@ -13,6 +13,7 @@ import { useRouter } from 'next/navigation'
 import type { TimelineItem } from '@/lib/contracts/timeline'
 import { readErrorMessage } from '@/components/messages/errors'
 import { formatDateTime } from '@/components/ui/format'
+import { CHANNEL_LABEL, DIRECTION_LABEL, STATUS_LABEL } from '@/components/messages/labels'
 
 type MessageItem = Extract<TimelineItem, { kind: 'message' }>
 
@@ -108,7 +109,7 @@ export function MessageBubble({ message, canRetry }: MessageBubbleProps) {
           body: '{}',
         })
       } catch {
-        setError('Network error, try again.')
+        setError('เครือข่ายขัดข้อง กด "ส่งอีกครั้ง" เพื่อลองใหม่')
         return
       }
 
@@ -127,14 +128,14 @@ export function MessageBubble({ message, canRetry }: MessageBubbleProps) {
     <div className={'flex ' + (isOutbound ? 'justify-end' : 'justify-start')}>
       <div className={'max-w-[75%] rounded-lg p-3 text-sm ' + bg + (failed ? ' border border-red-400' : '')}>
         <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-          <span>{message.channel}</span>
-          <span>{message.direction}</span>
+          <span>{CHANNEL_LABEL[message.channel]}</span>
+          <span>{DIRECTION_LABEL[message.direction]}</span>
           <time dateTime={message.at} suppressHydrationWarning>
             {formatDateTime(message.at)}
           </time>
-          <span className="rounded bg-white px-1 text-[10px] uppercase text-slate-500">{message.status}</span>
+          <span className="rounded bg-white px-1 text-xs text-slate-500">{STATUS_LABEL[message.status]}</span>
           {message.aiSuggestionId && (
-            <span className="rounded bg-indigo-100 px-1 text-[10px] uppercase text-indigo-700">AI draft</span>
+            <span className="rounded bg-indigo-100 px-1 text-xs text-indigo-700">ร่างจาก AI</span>
           )}
         </div>
 
@@ -142,7 +143,7 @@ export function MessageBubble({ message, canRetry }: MessageBubbleProps) {
 
         {failed && (
           <p role="alert" className="mt-1 text-xs text-red-600">
-            {message.lastError} (attempt {message.attemptCount})
+            {message.lastError} (ลองส่งแล้ว {message.attemptCount} ครั้ง)
           </p>
         )}
 
@@ -153,7 +154,7 @@ export function MessageBubble({ message, canRetry }: MessageBubbleProps) {
             disabled={pending}
             className="mt-2 rounded bg-red-600 px-2 py-1 text-xs text-white disabled:opacity-40"
           >
-            {pending ? 'Retrying...' : 'Retry'}
+            {pending ? 'กำลังส่งอีกครั้ง...' : 'ส่งอีกครั้ง'}
           </button>
         )}
 

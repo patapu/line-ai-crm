@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server'
 import { getDb } from '@/lib/db'
 import { DomainError } from '@/lib/errors'
 import { encrypt, SESSION_COOKIE_NAME } from '@/lib/auth/session'
+import type { LineClient } from '@/modules/line/types'
 import { MockLineClient } from '@/modules/line/client.mock'
 import { backfillContactProfile } from '@/modules/line/webhook'
 
@@ -482,6 +483,49 @@ describe('case 10: a pre-inserted RECEIVED row is reprocessed, not treated as a 
   })
 })
 
+async function createPlaceholderContact(lineUserId: string, firstName = 'LINE user') {
+  return db.contact.create({
+    data: { firstName, lineUserId, source: 'LINE' },
+  })
+}
+
+async function createLeadFor(
+  contactId: string,
+  overrides: { title?: string; stage?: 'NEW' | 'QUALIFIED' | 'PROPOSAL' | 'WON' | 'LOST' } = {},
+) {
+  const stage = overrides.stage ?? 'NEW'
+  return db.lead.create({
+    data: {
+      title: overrides.title ?? 'LINE: LINE user',
+      contactId,
+      ownerId: adminId,
+      source: 'LINE',
+      stage,
+      lostReason: stage === 'LOST' ? 'test fixture' : undefined,
+    },
+  })
+}
+
+function throwingProfileLine(): LineClient {
+  return {
+    mode: 'mock',
+    verifySignature: () => true,
+    push: async () => ({ ok: true, httpStatus: 200, duplicate: false, requestId: null }),
+    getProfile: async () => {
+      throw new Error('getProfile failed')
+    },
+  }
+}
+
+function nullProfileLine(): LineClient {
+  return {
+    mode: 'mock',
+    verifySignature: () => true,
+    push: async () => ({ ok: true, httpStatus: 200, duplicate: false, requestId: null }),
+    getProfile: async () => null,
+  }
+}
+
 describe('case 11: backfillContactProfile', () => {
   it('sets a Mock-prefixed display name on a contact with none', async () => {
     const lineUserId = newLineUserId()
@@ -505,6 +549,239 @@ describe('case 11: backfillContactProfile', () => {
 
     const updated = await db.contact.findUniqueOrThrow({ where: { id: contact.id } })
     expect(updated.lineDisplayName).toBe('Existing Name')
+  })
+
+  it('(a) fills firstName, lineDisplayName, and an open placeholder-titled lead title', async () => {
+    const lineUserId = newLineUserId()
+    const contact = await createPlaceholderContact(lineUserId)
+    const lead = await createLeadFor(contact.id)
+    const name = 'สมชาย ใจดี'
+    line.setProfileName(lineUserId, name)
+
+    await backfillContactProfile(db, line, { contactId: contact.id, lineUserId })
+
+    const updatedContact = await db.contact.findUniqueOrThrow({ where: { id: contact.id } })
+    expect(updatedContact.firstName).toBe(name)
+    expect(updatedContact.lineDisplayName).toBe(name)
+
+    const updatedLead = await db.lead.findUniqueOrThrow({ where: { id: lead.id } })
+    expect(updatedLead.title).toBe('LINE: ' + name)
+  })
+
+  it('(b) keeps an already-edited firstName but still fills a null lineDisplayName', async () => {
+    const lineUserId = newLineUserId()
+    const contact = await createPlaceholderContact(lineUserId, 'Somchai (edited)')
+    const name = 'New Display Name'
+    line.setProfileName(lineUserId, name)
+
+    await backfillContactProfile(db, line, { contactId: contact.id, lineUserId })
+
+    const updated = await db.contact.findUniqueOrThrow({ where: { id: contact.id } })
+    expect(updated.firstName).toBe('Somchai (edited)')
+    expect(updated.lineDisplayName).toBe(name)
+  })
+
+  it('(c) keeps an already-edited lead title', async () => {
+    const lineUserId = newLineUserId()
+    const contact = await createPlaceholderContact(lineUserId)
+    const lead = await createLeadFor(contact.id, { title: 'Custom title chosen by sales' })
+    line.setProfileName(lineUserId, 'Another Name')
+
+    await backfillContactProfile(db, line, { contactId: contact.id, lineUserId })
+
+    const updated = await db.lead.findUniqueOrThrow({ where: { id: lead.id } })
+    expect(updated.title).toBe('Custom title chosen by sales')
+  })
+
+  it('(d) leaves WON and LOST placeholder-titled leads unchanged', async () => {
+    const lineUserId = newLineUserId()
+    const contact = await createPlaceholderContact(lineUserId)
+    const wonLead = await createLeadFor(contact.id, { stage: 'WON' })
+    const lostLead = await createLeadFor(contact.id, { stage: 'LOST' })
+    line.setProfileName(lineUserId, 'Somchai Won Lost')
+
+    await backfillContactProfile(db, line, { contactId: contact.id, lineUserId })
+
+    expect((await db.lead.findUniqueOrThrow({ where: { id: wonLead.id } })).title).toBe('LINE: LINE user')
+    expect((await db.lead.findUniqueOrThrow({ where: { id: lostLead.id } })).title).toBe('LINE: LINE user')
+  })
+
+  it('(e) is idempotent: a second run with a different profile name changes nothing further', async () => {
+    const lineUserId = newLineUserId()
+    const contact = await createPlaceholderContact(lineUserId)
+    const lead = await createLeadFor(contact.id)
+    const firstName = 'First Name Wins'
+    line.setProfileName(lineUserId, firstName)
+
+    await backfillContactProfile(db, line, { contactId: contact.id, lineUserId })
+    line.setProfileName(lineUserId, 'Second Name Should Not Apply')
+    await backfillContactProfile(db, line, { contactId: contact.id, lineUserId })
+
+    const updatedContact = await db.contact.findUniqueOrThrow({ where: { id: contact.id } })
+    expect(updatedContact.firstName).toBe(firstName)
+    expect(updatedContact.lineDisplayName).toBe(firstName)
+
+    const updatedLead = await db.lead.findUniqueOrThrow({ where: { id: lead.id } })
+    expect(updatedLead.title).toBe('LINE: ' + firstName)
+  })
+
+  it('(f) a whitespace/control-only display name makes no change', async () => {
+    const lineUserId = newLineUserId()
+    const contact = await createPlaceholderContact(lineUserId)
+    const lead = await createLeadFor(contact.id)
+    line.setProfileName(lineUserId, '   \x00\x1F\x7F   ')
+
+    await backfillContactProfile(db, line, { contactId: contact.id, lineUserId })
+
+    const updatedContact = await db.contact.findUniqueOrThrow({ where: { id: contact.id } })
+    expect(updatedContact.firstName).toBe('LINE user')
+    expect(updatedContact.lineDisplayName).toBeNull()
+
+    const updatedLead = await db.lead.findUniqueOrThrow({ where: { id: lead.id } })
+    expect(updatedLead.title).toBe('LINE: LINE user')
+  })
+
+  it('(g) caps a 150-char display name to 100 chars in firstName/lineDisplayName and the lead title', async () => {
+    const lineUserId = newLineUserId()
+    const contact = await createPlaceholderContact(lineUserId)
+    const lead = await createLeadFor(contact.id)
+    const longName = 'A'.repeat(150)
+    line.setProfileName(lineUserId, longName)
+
+    await backfillContactProfile(db, line, { contactId: contact.id, lineUserId })
+
+    const expected = 'A'.repeat(100)
+    const updatedContact = await db.contact.findUniqueOrThrow({ where: { id: contact.id } })
+    expect(updatedContact.firstName).toBe(expected)
+    expect(updatedContact.lineDisplayName).toBe(expected)
+
+    const updatedLead = await db.lead.findUniqueOrThrow({ where: { id: lead.id } })
+    expect(updatedLead.title).toBe('LINE: ' + expected)
+  })
+
+  it('(h) a throwing getProfile makes no change and does not throw', async () => {
+    const lineUserId = newLineUserId()
+    const contact = await createPlaceholderContact(lineUserId)
+    const lead = await createLeadFor(contact.id)
+
+    await expect(
+      backfillContactProfile(db, throwingProfileLine(), { contactId: contact.id, lineUserId }),
+    ).resolves.toBeUndefined()
+
+    const updated = await db.contact.findUniqueOrThrow({ where: { id: contact.id } })
+    expect(updated.firstName).toBe('LINE user')
+    expect(updated.lineDisplayName).toBeNull()
+
+    const updatedLead = await db.lead.findUniqueOrThrow({ where: { id: lead.id } })
+    expect(updatedLead.title).toBe('LINE: LINE user')
+  })
+
+  it('(h) a null getProfile makes no change and does not throw', async () => {
+    const lineUserId = newLineUserId()
+    const contact = await createPlaceholderContact(lineUserId)
+    const lead = await createLeadFor(contact.id)
+
+    await expect(
+      backfillContactProfile(db, nullProfileLine(), { contactId: contact.id, lineUserId }),
+    ).resolves.toBeUndefined()
+
+    const updated = await db.contact.findUniqueOrThrow({ where: { id: contact.id } })
+    expect(updated.firstName).toBe('LINE user')
+    expect(updated.lineDisplayName).toBeNull()
+
+    const updatedLead = await db.lead.findUniqueOrThrow({ where: { id: lead.id } })
+    expect(updatedLead.title).toBe('LINE: LINE user')
+  })
+
+  it('(i) logs line.profile_backfilled with counts, never the display name', async () => {
+    const prevLogLevel = process.env.LOG_LEVEL
+    process.env.LOG_LEVEL = 'debug'
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      const lineUserId = newLineUserId()
+      const contact = await createPlaceholderContact(lineUserId)
+      await createLeadFor(contact.id)
+      const secretName = 'ห้าม log ชื่อนี้'
+      line.setProfileName(lineUserId, secretName)
+
+      await backfillContactProfile(db, line, { contactId: contact.id, lineUserId })
+
+      const logged = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n')
+      expect(logged).toContain('line.profile_backfilled')
+      expect(logged).not.toContain(secretName)
+      expect(logged).toContain('"displayNameSet":1')
+      expect(logged).toContain('"firstNameSet":1')
+      expect(logged).toContain('"leadTitlesSet":1')
+    } finally {
+      logSpy.mockRestore()
+      if (prevLogLevel === undefined) delete process.env.LOG_LEVEL
+      else process.env.LOG_LEVEL = prevLogLevel
+    }
+  })
+
+  it('(j) a control character mid-name is replaced with a space, not deleted', async () => {
+    const lineUserId = newLineUserId()
+    const contact = await createPlaceholderContact(lineUserId)
+    // String.fromCharCode, not a raw control byte in this source file.
+    const name = 'Som' + String.fromCharCode(0x00) + 'chai'
+    line.setProfileName(lineUserId, name)
+
+    await backfillContactProfile(db, line, { contactId: contact.id, lineUserId })
+
+    const updated = await db.contact.findUniqueOrThrow({ where: { id: contact.id } })
+    expect(updated.firstName).toBe('Som chai')
+    expect(updated.lineDisplayName).toBe('Som chai')
+  })
+
+  it('(k) a bidi override and zero-width characters are stripped, not left in the name', async () => {
+    const lineUserId = newLineUserId()
+    const contact = await createPlaceholderContact(lineUserId)
+    // Built from numeric code points via String.fromCharCode, not literal
+    // invisible/bidi characters in this source file.
+    const zeroWidthSpace = String.fromCharCode(0x200b)
+    const rightToLeftOverride = String.fromCharCode(0x202e)
+    const byteOrderMark = String.fromCharCode(0xfeff)
+    const name = zeroWidthSpace + 'Som' + rightToLeftOverride + 'chai' + byteOrderMark
+    line.setProfileName(lineUserId, name)
+
+    await backfillContactProfile(db, line, { contactId: contact.id, lineUserId })
+
+    const updated = await db.contact.findUniqueOrThrow({ where: { id: contact.id } })
+    expect(updated.firstName).toBe('Som chai')
+    expect(updated.lineDisplayName).toBe('Som chai')
+  })
+
+  it('(l) a 100-char cap that would split a surrogate pair drops the lone high surrogate', async () => {
+    const lineUserId = newLineUserId()
+    const contact = await createPlaceholderContact(lineUserId)
+    // U+1F600 (grinning face) as its UTF-16 surrogate pair, built via
+    // String.fromCharCode so no raw astral character sits in this file.
+    const emoji = String.fromCharCode(0xd83d, 0xde00)
+    const name = 'A'.repeat(99) + emoji
+    line.setProfileName(lineUserId, name)
+
+    await backfillContactProfile(db, line, { contactId: contact.id, lineUserId })
+
+    const expected = 'A'.repeat(99)
+    const updated = await db.contact.findUniqueOrThrow({ where: { id: contact.id } })
+    expect(updated.firstName).toBe(expected)
+    expect(updated.lineDisplayName).toBe(expected)
+    expect(updated.firstName.charCodeAt(updated.firstName.length - 1)).toBeLessThan(0xd800)
+  })
+
+  it('(m) legacy shape: lineDisplayName already set but firstName still placeholder only updates firstName', async () => {
+    const lineUserId = newLineUserId()
+    const contact = await db.contact.create({
+      data: { firstName: 'LINE user', lineUserId, source: 'LINE', lineDisplayName: 'Already Set From Before' },
+    })
+    const name = 'New Profile Name'
+    line.setProfileName(lineUserId, name)
+
+    await backfillContactProfile(db, line, { contactId: contact.id, lineUserId })
+
+    const updated = await db.contact.findUniqueOrThrow({ where: { id: contact.id } })
+    expect(updated.firstName).toBe(name)
+    expect(updated.lineDisplayName).toBe('Already Set From Before')
   })
 })
 
@@ -557,5 +834,49 @@ describe('case 12: the simulate route', () => {
     const req = simulateRequest({ event: 'message', text: 'simulated with no cookie' })
     const res = await POST(req, {})
     expect(res.status).toBe(401)
+  })
+
+  it('returns 400 for a displayName over 100 chars', async () => {
+    const { POST } = await import('@/app/api/dev/line/simulate/route')
+    const token = await cookieFor(adminId, 'ADMIN', 'Lane C Test Admin')
+    const req = simulateRequest(
+      { event: 'message', text: 'simulated from admin', displayName: 'x'.repeat(101) },
+      token,
+    )
+    const res = await POST(req, {})
+    expect(res.status).toBe(400)
+  })
+
+  it('returns 400 for a displayName with control characters', async () => {
+    const { POST } = await import('@/app/api/dev/line/simulate/route')
+    const token = await cookieFor(adminId, 'ADMIN', 'Lane C Test Admin')
+    const req = simulateRequest(
+      { event: 'message', text: 'simulated from admin', displayName: 'bad\x00name' },
+      token,
+    )
+    const res = await POST(req, {})
+    expect(res.status).toBe(400)
+  })
+
+  it('a valid displayName reaches MockLineClient.getProfile', async () => {
+    // The route reads its LineClient via getLineClient()'s process-wide
+    // singleton, not the test's own `line` instance, so the profile has to
+    // be read back through the same singleton.
+    const { getLineClient } = await import('@/modules/line/client')
+    const { POST } = await import('@/app/api/dev/line/simulate/route')
+    const token = await cookieFor(adminId, 'ADMIN', 'Lane C Test Admin')
+    const req = simulateRequest(
+      { event: 'message', text: 'simulated from admin', displayName: 'Somchai Simulated' },
+      token,
+    )
+    const res = await POST(req, {})
+    expect(res.status).toBe(200)
+    const json = (await res.json()) as { outcome: { processed: number }; lineUserId: string; webhookEventId: string }
+    trackedLineUserIds.add(json.lineUserId)
+    trackedWebhookEventIds.add(json.webhookEventId)
+
+    const routeLine = getLineClient() as MockLineClient
+    const profile = await routeLine.getProfile(json.lineUserId)
+    expect(profile).toEqual({ userId: json.lineUserId, displayName: 'Somchai Simulated' })
   })
 })

@@ -40,7 +40,7 @@ describe('MessageBubble server render', () => {
   it('renders the Retry button in server-rendered HTML even when message.at is 30h old (past the 23h window on any real clock)', () => {
     const html = renderToString(<MessageBubble message={makeMessage()} canRetry={true} />)
 
-    expect(html).toContain('Retry')
+    expect(html).toContain('ส่งอีกครั้ง')
     expect(html).toContain('<button')
   })
 
