@@ -25,6 +25,33 @@ Newest entries go at the top.
 
 ## Log
 
+### 2026-09-21, Lane C (LINE contact name backfill)
+
+**Sample tasks / prompts**
+- "lead และ contact ไม่มีชื่อ": after a simulated LINE message on production, the new lead showed as "LINE: LINE user". The agent traced it: the webhook creates the contact before the LINE profile is known, and the later profile backfill only filled `lineDisplayName`, never `firstName` or the lead title.
+- "ทำแบบ ข. รวมกับ lane C เลย": orchestrator planned it; code-explorer confirmed design.md allows `modules/line` to write Contact and Lead directly; code-planner kept it lane C only; code-implementer, code-tester and code-reviewer ran on branch `lane-c-thai-copy`.
+
+**What the human reviewed or rejected**
+- Pakorn chose the code fix (option B) over renaming records by hand before the demo, and asked for it to go into the existing lane C branch.
+- code-reviewer found 0 critical, 0 major and 6 minor. Two were fixed before finishing: the code comment cited CR-3, which is the advisory-lock CR and has nothing to do with the placeholder names; and invisible or bidi characters in a LINE display name could still reach `firstName` and the lead title. Tests: typecheck, lint and 1293 tests passed, including the DB tests.
+
+**One change made after human inspection**
+- `modules/line/webhook.ts` `backfillContactProfile`: only filled `lineDisplayName` -> it now also replaces `firstName` when it is still "LINE user" and the open lead title when it is still "LINE: LINE user", in one transaction, using WHERE conditions so edited values are never overwritten. `/api/dev/line/simulate` also takes an optional `displayName` for demos. Reason: every contact that came in through LINE showed as "LINE user".
+
+### 2026-09-21, Lanes A, B and C (mobile UX and Thai copy)
+
+**Sample tasks / prompts**
+- "ลองเล่น mobile ตาม script": the agent walked the demo script at 375x812 on production after deploying `ai-crm-20260921-160347` and listed three problems: the pipeline board was about 9,960px tall, the AI panel and Composer sat below the edit form, and English text was mixed into the Thai UI (Composer copy and copilot insight text).
+- "แก้ข้อ 1-3 ให้หน่อย": orchestrator planned it; code-explorer, ui-designer and code-planner produced the research, a design spec and a per-lane plan; three code-implementers worked in separate worktrees (`lane-a-mobile-ux`, `lane-b-thai-insight`, `lane-c-thai-copy`, all off main e3c445a); code-tester and code-reviewer checked the result.
+
+**What the human reviewed or rejected**
+- Pakorn chose which of the found issues to fix (items 1 to 3) and left the seed data future-date issue out.
+- Pakorn, as integration owner, asked for the work across lanes; the planner folded open CR-6 (Composer send button uses the theme Button) into the lane C change because the same file was being edited. The CR entry status itself was left for Pakorn to set.
+- code-reviewer found 0 critical and 1 major: lane B's QUEUED helper text now names the "ส่งอีกครั้ง" button that only lane C adds, so B and C must merge together. typecheck, lint and all tests passed in all three worktrees (1266 to 1273 tests each).
+
+**One change made after human inspection**
+- `skills/crm-copilot/instructions.md` and `modules/copilot/fallback.ts`: summary, score reasons and next-best-action text were English by design -> they are now Thai (draft reply still follows the reply locale), and `PROMPT_VERSION` moved to `crm-copilot-v3`. Reason: testing on a phone showed English insight text next to a Thai draft in an otherwise Thai UI.
+
 ### 2026-09-21, Lane A
 
 **Sample tasks / prompts**
