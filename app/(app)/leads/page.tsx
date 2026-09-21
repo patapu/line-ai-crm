@@ -1,4 +1,5 @@
 // OWNER: lane A — Server Component
+import type { Metadata } from 'next'
 import { getActor } from '@/lib/auth/dal'
 import { listCompanyOptions, listLeads, listUsers } from '@/modules/crm/service'
 import { queryObject } from '@/modules/crm/repository'
@@ -8,6 +9,9 @@ import { LeadTable } from '@/components/crm/LeadTable'
 import { Pagination } from '@/components/ui/Pagination'
 import { LinkButton } from '@/components/ui/LinkButton'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { PageHeader } from '@/components/ui/PageHeader'
+
+export const metadata: Metadata = { title: 'รายการ Lead' }
 
 export default async function LeadsPage(props: PageProps<'/leads'>) {
   await getActor()
@@ -23,10 +27,12 @@ export default async function LeadsPage(props: PageProps<'/leads'>) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-slate-900">Leads</h1>
-        <LinkButton href="/leads/new">New lead</LinkButton>
-      </div>
+      <PageHeader
+        group="CRM"
+        module="Leads"
+        title="รายการ Lead"
+        actions={<LinkButton href="/leads/new">New lead</LinkButton>}
+      />
       <LeadFilters values={values} users={users} companies={companies} />
       {page.items.length === 0 ? (
         <EmptyState title="ไม่พบ Lead" description="ลองปรับตัวกรองหรือสร้าง Lead ใหม่" />

@@ -22,13 +22,13 @@ export default async function ContactDetailPage(props: PageProps<'/contacts/[id]
   return (
     <div className="mx-auto flex max-w-xl flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-slate-900">{name}</h1>
+        <h1 className="text-xl font-bold text-primary-2">{name}</h1>
         <LinkButton href={`/leads/new?contactId=${contact.id}`} size="sm">
           สร้าง Lead
         </LinkButton>
       </div>
       <Card>
-        <p className="text-sm text-slate-600">จำนวน Lead: {contact.leadCount}</p>
+        <p className="text-sm text-muted">จำนวน Lead: {contact.leadCount}</p>
       </Card>
       <ContactForm mode="edit" contact={contact} companies={companies} users={users} />
       <DeleteButton

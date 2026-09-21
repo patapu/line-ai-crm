@@ -66,8 +66,8 @@ export function LoginForm({ next }: LoginFormProps) {
           autoComplete="current-password"
         />
       </Field>
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
-      <Button type="submit" disabled={submitting}>
+      {error ? <p className="text-sm text-danger">{error}</p> : null}
+      <Button type="submit" disabled={submitting} className="w-full">
         {submitting ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
       </Button>
     </form>

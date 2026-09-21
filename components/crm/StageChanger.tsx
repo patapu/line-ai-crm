@@ -88,7 +88,7 @@ export function StageChanger({ leadId, stage, canChange }: StageChangerProps) {
           disabled={!canChange}
         />
       ) : null}
-      {message ? <p className="text-sm text-slate-600">{message}</p> : null}
+      {message ? <p className="text-sm text-muted">{message}</p> : null}
       <Button type="submit" size="sm" disabled={submitting || !canChange}>
         เปลี่ยน stage
       </Button>

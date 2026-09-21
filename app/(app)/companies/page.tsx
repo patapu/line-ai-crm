@@ -1,4 +1,6 @@
 // OWNER: lane A — Server Component
+import type { Metadata } from 'next'
+import Link from 'next/link'
 import { getActor } from '@/lib/auth/dal'
 import { listCompanies } from '@/modules/crm/service'
 import { CompanyListQuery, queryObject } from '@/modules/crm/repository'
@@ -9,6 +11,9 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Field } from '@/components/ui/Field'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
+import { PageHeader } from '@/components/ui/PageHeader'
+
+export const metadata: Metadata = { title: 'รายชื่อบริษัท' }
 
 export default async function CompaniesPage(props: PageProps<'/companies'>) {
   await getActor()
@@ -24,20 +29,27 @@ export default async function CompaniesPage(props: PageProps<'/companies'>) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-slate-900">Companies</h1>
-        <LinkButton href="/companies/new">New company</LinkButton>
-      </div>
+      <PageHeader
+        group="CRM"
+        module="Companies"
+        title="รายชื่อบริษัท"
+        actions={<LinkButton href="/companies/new">New company</LinkButton>}
+      />
       <form
         method="get"
         action="/companies"
-        className="grid grid-cols-2 gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-4"
+        className="flex flex-wrap items-end gap-3 rounded-card border border-line bg-white p-4"
       >
-        <Field label="ค้นหา" htmlFor="q">
-          <Input id="q" name="q" defaultValue={values.q ?? ''} placeholder="ชื่อบริษัท, domain" />
-        </Field>
-        <div className="col-span-full">
+        <div className="min-w-0 flex-[1_1_14rem]">
+          <Field label="ค้นหา" htmlFor="q">
+            <Input id="q" name="q" defaultValue={values.q ?? ''} placeholder="ชื่อบริษัท, domain" />
+          </Field>
+        </div>
+        <div className="flex items-center gap-3">
           <Button type="submit">กรอง</Button>
+          <Link href="/companies" className="text-sm font-semibold text-primary-2 hover:underline">
+            ล้างตัวกรอง
+          </Link>
         </div>
       </form>
       {page.items.length === 0 ? (

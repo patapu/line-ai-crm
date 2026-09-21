@@ -25,32 +25,49 @@ Newest entries go at the top.
 
 ## Log
 
-### 2026-09-21, Lane C
+### 2026-09-21, Lane A
 
 **Sample tasks / prompts**
-- "ขอ script to presentation" for https://ai-crm.kurpakorn.com, then "ลอง test เป็น mobile ตาม script": the agent walked the demo script in the in-app browser at 375x812 (pipeline, leads filter, stage change, note, Ask AI, approve and send, manual LINE send, contacts, companies, `/api/health`).
-- "แก้บั๊กเวลาใน MessageBubble ให้หน่อย": orchestrator planned it; code-implementer changed `components/messages/MessageBubble.tsx`; code-tester added `components/messages/__tests__/MessageBubble.format.test.tsx`; code-reviewer reviewed it.
+- "ดู theme และ ux/ui ของ product ล่าสุด ที่ Jenosize เพื่อเอามาปรับ theme และ ux/ui" (look at the theme
+  and UX/UI of Jenosize's latest product and adapt our theme and UX/UI to match it).
+- "เริ่มเลย ใช้ Nunito คู่ IBM Plex Sans Thai Looped" (go ahead, use Nunito paired with IBM Plex Sans Thai
+  Looped).
+- The session ran as an orchestrator-planned pipeline: code-explorer read the Jenosize Marketing Cloud
+  page's CSS for its palette (#0042ED primary, #F56700 accent) and font (GothamRounded); ui-designer
+  wrote a design spec with WCAG contrast estimates; code-planner and code-implementer applied the
+  tokens in app/globals.css, loaded the fonts through next/font in app/layout.tsx, and restyled
+  components/ui and components/crm, plus two new components, PageHeader and NavLinks. code-tester and
+  code-reviewer ran three review rounds. Pakorn then chose all the follow ups in one go: fix the review
+  minors, commit and open a PR, run a UX audit, file CRs for lanes B and C, and add this log entry.
 
 **What the human reviewed or rejected**
-- The browser run showed Ask AI always used the rule-based fallback. The container log said `NO_API_KEY`. Pakorn said the key was already set and showed the env file. The agent found a second, empty `GOOGLE_GENERATIVE_AI_API_KEY=` line from the example template that overrode it. After Pakorn fixed the file, Ask AI returned a model suggestion.
-- code-reviewer found 0 critical and 0 major issues. Its minor note (no test for the formatted time) was covered by the new test file. Typecheck and lint passed, and the 2 new tests passed. The full `npm test` run had 2 DB-backed lane D files fail because no local Postgres was running; they are not related to this change.
+- Pakorn picked the fonts himself, Nunito paired with IBM Plex Sans Thai Looped, replacing GothamRounded
+  from the reference site, which is a licensed font the project cannot use.
+- Pakorn approved the retheme overall and chose to fix the review minors before committing, rather than
+  commit first and fix later.
+- The PR (https://github.com/patapu/line-ai-crm/pull/12, commit 7f5d2df) was first going to branch off
+  local main, but that copy carried an unpushed lane D deploy commit (fbc9505). Pakorn rejected that and
+  asked for a rebase onto origin/main instead.
+- For the UX check, Pakorn chose "test ใน browser ดีกว่า" (better to test in the browser) over a static
+  review, so ux-auditor drove the in-app browser.
+- Pakorn logged into the app himself for the browser session; no agent read or typed his credentials.
+- Pakorn approved filing CR-5 (lane B, InsightPanel) and CR-6 (lane C, Composer) so the other lanes pick
+  up the new theme.
 
 **One change made after human inspection**
-- `components/messages/MessageBubble.tsx`: `new Date(message.at).toLocaleString()` -> `formatDateTime(message.at)` from `components/ui/format.ts`. Reason: on production the server (UTC, en-US) rendered "9/21/2026, 4:40:39 AM" while the client and Timeline showed Bangkok time in Thai format, so bubble times were wrong and did not match the rest of the page.
-
-### 2026-09-18, Lane D
-
-**Sample tasks / prompts**
-- After CR-5 (lane D owns `Dockerfile`, `.dockerignore`, `build.ps1`, `deploy/**`), Pakorn said "yes" to starting lane D work: write the VPS deploy files, then run typecheck, lint, test and a local docker build. No push, no VPS action.
-- orchestrator planned it; code-explorer gathered facts (standalone output, `prisma.config.ts` reads `DIRECT_URL` at load, `skills/` read at runtime); code-implementer wrote the files; code-tester ran typecheck, lint, tests (1208 passed) and a standalone build; provisioner built the runner and migrate images locally and smoke tested them against the local dev db (`/api/health` 200).
-
-**What the human reviewed or rejected**
-- The deploy files follow the VPS layout that read only checks found on 2026-09-17 (Caddy on the shared `web` network, one compose project per app under `/root/<name>-stack`).
-- code-reviewer found 2 majors in the first draft: the `SESSION_SECRET` placeholder in `deploy/ai-crm.env.example` was 46 characters, so it passed the `min(32)` check and a forgotten edit would run production with a secret from git; and the Postgres service had the generic name `db` while the app also joins the shared `web` network. Both were fixed and a second review found no blocking issues.
-- The first draft also set `COPILOT_TIMEOUT_MS=25000` instead of the 15000 given in the brief; it was changed back to 15000. Pakorn still decides the final value.
-
-**One change made after human inspection**
-- `deploy/ai-crm.env.example`: `SESSION_SECRET=CHANGE_ME_generate_with_openssl_rand_base64_48` -> `SESSION_SECRET=CHANGE_ME`. Reason: a placeholder shorter than 32 characters fails validation, so the app refuses to work instead of running with a known secret (verified: the runner returns 503 with the placeholder).
+- Before: the PR was going to be opened from local main, which included lane D's unpushed deploy commit
+  fbc9505. After: Pakorn had the branch rebased onto origin/main instead, so PR #12 carries only the lane
+  A retheme changes and leaves fbc9505 out.
+- Also from this session, not from a human: while reading the reference site, the agent clicked "ACCEPT
+  ALL" on its cookie banner instead of the privacy-preserving choice, and reported the mistake instead of
+  hiding it. Separately, ux-auditor could not see a tab that had been opened outside its own Chrome tab
+  group, and it stopped and asked instead of opening a new tab itself. A review round also found a Card
+  padding override that had no effect, because the project's `cn` helper has no tailwind-merge and the
+  override was silently dropped.
+- Verification: typecheck, lint, 1235 tests, and the build all passed. The browser UX audit came back
+  NEEDS WORK: 0 critical, 2 major (the mobile lead table squeezes its columns instead of scrolling, and
+  the 8 filters push the table below the fold at 360px), and 6 minor findings. The full report is a local
+  UX report, not part of this repo.
 
 ### 2026-09-17, Lane B
 

@@ -17,10 +17,10 @@ export default async function CompanyDetailPage(props: PageProps<'/companies/[id
 
   return (
     <div className="mx-auto flex max-w-xl flex-col gap-4">
-      <h1 className="text-lg font-semibold text-slate-900">{company.name}</h1>
+      <h1 className="text-xl font-bold text-primary-2">{company.name}</h1>
       <Card>
-        <p className="text-sm text-slate-600">Contacts: {company.contactCount}</p>
-        <p className="text-sm text-slate-600">Leads: {company.leadCount}</p>
+        <p className="text-sm text-muted">Contacts: {company.contactCount}</p>
+        <p className="text-sm text-muted">Leads: {company.leadCount}</p>
       </Card>
       <CompanyForm mode="edit" company={company} />
       <DeleteButton
