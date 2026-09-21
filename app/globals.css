@@ -2,11 +2,50 @@
 @import 'tailwindcss';
 
 @theme {
-  --font-sans: ui-sans-serif, system-ui, 'Noto Sans Thai', 'Leelawadee UI', sans-serif;
+  /* brand */
+  --color-primary: #0042ED;
+  --color-primary-2: #204CD5;
+  --color-accent: #F56700;        /* orange FILL only; never small text */
+  --color-ink: #020817;
+  --color-muted: #6B7280;
+  --color-muted-2: #9CA3AF;       /* disabled text + decorative dashed border ONLY */
+  --color-surface: #F5FAFB;
+  /* derived */
+  --color-accent-ink: #B24800;    /* orange TEXT (5.50:1 on white) */
+  --color-accent-soft: #FFF1E6;
+  --color-primary-soft: #E8EEFE;
+  --color-ink-2: #374151;
+  --color-line: #E3E9EE;
+  --color-neutral-soft: #EEF1F4;
+  --color-field-border: #7B8494;  /* >=3:1 for 1.4.11 */
+  /* semantic */
+  --color-danger: #B91C1C;
+  --color-danger-hover: #991B1B;
+  --color-danger-soft: #FDECEC;
+  --color-success: #166534;
+  --color-success-soft: #E7F6EC;
+  --color-warning: #92400E;
+  --color-warning-soft: #FEF3C7;
+  /* shape */
+  --radius-card: 12px;
+  --radius-field: 8px;
+}
+
+@theme inline {
+  --font-sans: var(--font-nunito), var(--font-plex-thai), ui-sans-serif, system-ui, sans-serif;
+}
+
+@utility bg-brand-wash {
+  background-image: linear-gradient(113deg, rgba(0,190,140,.07) -30%, rgba(0,210,255,.07) 31%, rgba(0,90,220,.07) 94%);
 }
 
 @layer base {
   body {
-    @apply bg-slate-50 text-slate-900 antialiased;
+    @apply bg-surface text-ink antialiased;
+    line-height: 1.6;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
   }
 }

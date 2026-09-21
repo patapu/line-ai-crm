@@ -4,7 +4,6 @@
 // already exclude `page` (see queryObject(...) at each call site).
 
 import Link from 'next/link'
-import { cn } from '@/components/ui/cn'
 
 export interface PaginationProps {
   page: number
@@ -26,31 +25,35 @@ export function Pagination({ page, pageSize, total, basePath, params }: Paginati
   const hasNext = page < totalPages
 
   return (
-    <div className="flex items-center justify-between gap-4 py-3 text-sm text-slate-600">
+    <div className="flex items-center justify-between gap-4 py-3 text-sm text-muted">
       <span>
         หน้า {page} / {totalPages} ({total} รายการ)
       </span>
       <div className="flex gap-2">
-        <Link
-          aria-disabled={!hasPrev}
-          href={hasPrev ? hrefFor(basePath, params, page - 1) : hrefFor(basePath, params, page)}
-          className={cn(
-            'rounded-md border border-slate-300 px-3 py-1.5',
-            hasPrev ? 'bg-white hover:bg-slate-50' : 'pointer-events-none bg-slate-100 text-slate-400',
-          )}
-        >
-          ก่อนหน้า
-        </Link>
-        <Link
-          aria-disabled={!hasNext}
-          href={hasNext ? hrefFor(basePath, params, page + 1) : hrefFor(basePath, params, page)}
-          className={cn(
-            'rounded-md border border-slate-300 px-3 py-1.5',
-            hasNext ? 'bg-white hover:bg-slate-50' : 'pointer-events-none bg-slate-100 text-slate-400',
-          )}
-        >
-          ถัดไป
-        </Link>
+        {hasPrev ? (
+          <Link
+            href={hrefFor(basePath, params, page - 1)}
+            className="rounded-full border border-field-border bg-white px-4 py-1.5 font-semibold text-primary-2 hover:bg-primary-soft"
+          >
+            ก่อนหน้า
+          </Link>
+        ) : (
+          <span className="rounded-full border border-line bg-neutral-soft px-4 py-1.5 text-muted-2">
+            ก่อนหน้า
+          </span>
+        )}
+        {hasNext ? (
+          <Link
+            href={hrefFor(basePath, params, page + 1)}
+            className="rounded-full border border-field-border bg-white px-4 py-1.5 font-semibold text-primary-2 hover:bg-primary-soft"
+          >
+            ถัดไป
+          </Link>
+        ) : (
+          <span className="rounded-full border border-line bg-neutral-soft px-4 py-1.5 text-muted-2">
+            ถัดไป
+          </span>
+        )}
       </div>
     </div>
   )

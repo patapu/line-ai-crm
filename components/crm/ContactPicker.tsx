@@ -23,13 +23,22 @@ export interface ContactPickerProps {
   name: string
   initial: ContactPickerOption | null
   onSelect?: (option: ContactPickerOption) => void
+  'aria-invalid'?: boolean
+  'aria-describedby'?: string
 }
 
 function labelFor(item: ContactListItem): string {
   return item.lastName ? `${item.firstName} ${item.lastName}` : item.firstName
 }
 
-export function ContactPicker({ id, name, initial, onSelect }: ContactPickerProps) {
+export function ContactPicker({
+  id,
+  name,
+  initial,
+  onSelect,
+  'aria-invalid': ariaInvalid,
+  'aria-describedby': ariaDescribedBy,
+}: ContactPickerProps) {
   const router = useRouter()
   const [query, setQuery] = useState(initial?.label ?? '')
   const [selectedId, setSelectedId] = useState(initial?.id ?? '')
@@ -86,15 +95,17 @@ export function ContactPicker({ id, name, initial, onSelect }: ContactPickerProp
         onFocus={() => setOpen(true)}
         placeholder="ค้นหา contact..."
         autoComplete="off"
+        aria-invalid={ariaInvalid}
+        aria-describedby={ariaDescribedBy}
       />
       {open && options.length > 0 ? (
-        <ul className="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg">
+        <ul className="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-field border border-line bg-white shadow-lg">
           {options.map((option) => (
             <li key={option.id}>
               <button
                 type="button"
                 onClick={() => handlePick(option)}
-                className="block w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                className="block w-full px-3 py-2 text-left text-sm text-ink hover:bg-primary-soft focus-visible:bg-primary-soft"
               >
                 {option.label}
               </button>

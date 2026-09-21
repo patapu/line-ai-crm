@@ -28,6 +28,30 @@ Newest entries go at the top.
 
 ## Log
 
+### CR-6: Composer send button should use lane A's retheme instead of hardcoded slate-900
+
+- Date: 2026-09-21
+- Requested by: Lane A
+- File(s): `components/messages/Composer.tsx` (~line 168, send button only). No frozen file, no signature change: `Composer`'s props (`{ leadId: string; canSend: boolean; hasLine: boolean }`) are unchanged.
+- Current contract: `docs/design.md` section 1 and the lane ownership table give Lane C the body of `Composer.tsx`. The send button around line 168 is `rounded bg-slate-900` (a black, square-cornered button). Lane A's retheme (see `docs/contract-change-requests.md` CR-5 for the matching InsightPanel request) replaced the app's primary color with `--color-primary` (`#0042ED`) and its hover with `--color-primary-2` (`#204CD5`), and all other primary actions now use the pill-shaped `Button` component.
+- Proposed change: either reuse lane A's `Button` component with `variant="primary"` (preferred, keeps one source of truth for the primary action style), or, if `Composer` cannot take a dependency on `Button` for its own reasons, change the literal classes to `rounded-full bg-primary hover:bg-primary-2 text-white`. Either way the button's props, disabled/aria behaviour, and click handler stay exactly as Lane C wrote them; only the visual classes change.
+- Reason: a black square button next to the new blue pill buttons elsewhere on the page reads as a broken or unstyled control, and does not match the rest of the retheme.
+- Impact on other lanes: Lane C: body-only class change in the file it owns; no prop or behaviour change. Lane A: none beyond this request. Lane B, Lane D, Lane E: none.
+- Status: OPEN
+- Decision: escalate to Pakorn
+
+### CR-5: InsightPanel disabled-hover, heading, and checkbox colors should follow lane A's retheme tokens
+
+- Date: 2026-09-21
+- Requested by: Lane A
+- File(s): `components/copilot/InsightPanel.tsx` (~lines 601, 624, 742, 776, 792, 901, 917, 933, 1000). No frozen file, no signature change: `InsightPanel`'s props (`{ leadId: string; canApprove: boolean }`) are unchanged.
+- Current contract: `docs/design.md` section 1 and the lane ownership table give Lane B the body of `InsightPanel.tsx`. Lane A's retheme replaced the app's brand tokens: `--color-primary: #0042ED` (was slate-900/black) and `--color-primary-2: #204CD5` are now the primary action colors. `InsightPanel` still uses the old slate tokens in four places: (1) lines ~624 and ~933, `aria-disabled:hover:bg-slate-900` on a disabled button now sitting on the new blue primary background, so hovering it flashes the old black instead of a blue shade; (2) headings ~601, ~742, ~1000, `text-slate-900`, which no longer matches the retheme's heading color; (3) the score value ~776 and the next-best-action label ~792, also `text-slate-900`, same mismatch as the headings; (4) checkboxes ~901, ~917, `accent-slate-900`, which no longer matches the retheme's accent color.
+- Proposed change: `aria-disabled:hover:bg-slate-900` -> `aria-disabled:hover:bg-primary` (lines ~624, ~933); `text-slate-900` -> `text-primary-2` (headings ~601, ~742, ~1000, score value ~776, NBA label ~792); `accent-slate-900` -> `accent-primary` (checkboxes ~901, ~917). All three are lane A theme tokens defined in `app/globals.css` (`--color-primary`, `--color-primary-2`).
+- Reason: without this, the disabled-hover state flashes black over the new blue primary button, and the panel's headings, score value, NBA label, and checkbox accents visually clash with the rest of the retheme.
+- Impact on other lanes: Lane B: body-only class changes in the file it owns; no prop or behaviour change. Lane A: none beyond this request. Lane C, Lane D, Lane E: none.
+- Status: OPEN
+- Decision: escalate to Pakorn
+
 ### CR-4: Mount MessageBubble in the lead timeline so failed LINE messages can be retried
 
 - Date: 2026-09-17

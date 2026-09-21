@@ -37,24 +37,24 @@ export default async function LeadDetailPage(props: PageProps<'/leads/[id]'>) {
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
       <div className="flex flex-col gap-4 lg:col-span-2">
         <Card>
-          <div className="flex items-center justify-between">
-            <h1 className="text-lg font-semibold text-slate-900">{lead.title}</h1>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h1 className="min-w-0 break-words text-xl font-bold text-primary-2">{lead.title}</h1>
             <StageBadge stage={lead.stage} />
           </div>
-          <dl className="mt-3 grid grid-cols-2 gap-3 text-sm text-slate-600">
+          <dl className="mt-3 grid grid-cols-2 gap-3 text-sm text-ink">
             <div>
-              <dt className="text-xs text-slate-400">Contact</dt>
+              <dt className="text-xs font-semibold text-muted">Contact</dt>
               <dd>
-                <Link href={`/contacts/${lead.contact.id}`} className="hover:underline">
+                <Link href={`/contacts/${lead.contact.id}`} className="text-primary-2 hover:underline">
                   {contactName}
                 </Link>
               </dd>
             </div>
             <div>
-              <dt className="text-xs text-slate-400">Company</dt>
+              <dt className="text-xs font-semibold text-muted">Company</dt>
               <dd>
                 {lead.company ? (
-                  <Link href={`/companies/${lead.company.id}`} className="hover:underline">
+                  <Link href={`/companies/${lead.company.id}`} className="text-primary-2 hover:underline">
                     {lead.company.name}
                   </Link>
                 ) : (
@@ -63,24 +63,24 @@ export default async function LeadDetailPage(props: PageProps<'/leads/[id]'>) {
               </dd>
             </div>
             <div>
-              <dt className="text-xs text-slate-400">Owner</dt>
+              <dt className="text-xs font-semibold text-muted">Owner</dt>
               <dd>{lead.owner.name}</dd>
             </div>
             <div>
-              <dt className="text-xs text-slate-400">มูลค่า</dt>
+              <dt className="text-xs font-semibold text-muted">มูลค่า</dt>
               <dd>{lead.value !== null ? formatMoney(lead.value, lead.currency) : '-'}</dd>
             </div>
             <div>
-              <dt className="text-xs text-slate-400">Score</dt>
+              <dt className="text-xs font-semibold text-muted">Score</dt>
               <dd>{lead.score ?? '-'}</dd>
             </div>
             <div>
-              <dt className="text-xs text-slate-400">อัปเดตล่าสุด</dt>
+              <dt className="text-xs font-semibold text-muted">อัปเดตล่าสุด</dt>
               <dd>{formatDateTime(lead.updatedAt)}</dd>
             </div>
             {lead.lostReason ? (
               <div className="col-span-2">
-                <dt className="text-xs text-slate-400">เหตุผลที่ปิดไม่สำเร็จ</dt>
+                <dt className="text-xs font-semibold text-muted">เหตุผลที่ปิดไม่สำเร็จ</dt>
                 <dd>{lead.lostReason}</dd>
               </div>
             ) : null}
@@ -88,24 +88,24 @@ export default async function LeadDetailPage(props: PageProps<'/leads/[id]'>) {
         </Card>
 
         <Card>
-          <h2 className="mb-3 text-sm font-semibold text-slate-900">เปลี่ยนสถานะ</h2>
+          <h2 className="mb-3 text-base font-semibold text-primary-2">เปลี่ยนสถานะ</h2>
           <StageChanger leadId={lead.id} stage={lead.stage} canChange={canAct} />
         </Card>
 
         {canAct ? (
           <Card>
-            <h2 className="mb-3 text-sm font-semibold text-slate-900">แก้ไข Lead</h2>
+            <h2 className="mb-3 text-base font-semibold text-primary-2">แก้ไข Lead</h2>
             <LeadForm mode="edit" lead={lead} users={users} companies={companies} canReassign={actor.role === 'ADMIN'} />
           </Card>
         ) : null}
 
         <Card>
-          <h2 className="mb-3 text-sm font-semibold text-slate-900">เพิ่มกิจกรรม</h2>
+          <h2 className="mb-3 text-base font-semibold text-primary-2">เพิ่มกิจกรรม</h2>
           <ActivityForm leadId={lead.id} />
         </Card>
 
         <div>
-          <h2 className="mb-3 text-sm font-semibold text-slate-900">Timeline</h2>
+          <h2 className="mb-3 text-base font-semibold text-primary-2">Timeline</h2>
           <Timeline key={timeline.items[0]?.id ?? 'empty'} leadId={id} initial={timeline} canRetry={canAct} />
         </div>
       </div>

@@ -136,7 +136,7 @@ export function LeadForm({ mode, lead, users, companies, canReassign, initialCon
           </Select>
         </Field>
       ) : null}
-      {formError ? <p className="text-sm text-red-600">{formError}</p> : null}
+      {formError ? <p className="text-sm text-danger">{formError}</p> : null}
       <Button type="submit" disabled={submitting}>
         {mode === 'create' ? 'สร้าง Lead' : 'บันทึก'}
       </Button>

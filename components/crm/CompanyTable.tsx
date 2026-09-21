@@ -10,32 +10,32 @@ export interface CompanyTableProps {
 
 export function CompanyTable({ items }: CompanyTableProps) {
   return (
-    <Table>
+    <Table label="ตารางบริษัท" minWidth="sm">
       <thead>
-        <tr className="border-b border-slate-200 text-xs uppercase text-slate-500">
-          <th className="px-3 py-2">Name</th>
-          <th className="px-3 py-2">Domain</th>
-          <th className="px-3 py-2">Industry</th>
-          <th className="px-3 py-2">Size</th>
-          <th className="px-3 py-2">Contacts</th>
-          <th className="px-3 py-2">Leads</th>
-          <th className="px-3 py-2">Updated</th>
+        <tr className="border-b border-line bg-surface text-xs font-semibold text-muted whitespace-nowrap">
+          <th scope="col" className="px-3 py-2">Name</th>
+          <th scope="col" className="px-3 py-2">Domain</th>
+          <th scope="col" className="px-3 py-2">Industry</th>
+          <th scope="col" className="px-3 py-2">Size</th>
+          <th scope="col" className="px-3 py-2">Contacts</th>
+          <th scope="col" className="px-3 py-2">Leads</th>
+          <th scope="col" className="px-3 py-2">Updated</th>
         </tr>
       </thead>
       <tbody>
         {items.map((company) => (
-          <tr key={company.id} className="border-b border-slate-100 last:border-0">
-            <td className="px-3 py-2">
-              <Link href={`/companies/${company.id}`} className="font-medium text-slate-900 hover:underline">
+          <tr key={company.id} className="border-b border-neutral-soft last:border-0 hover:bg-surface whitespace-nowrap">
+            <td className="px-3 py-2 whitespace-normal">
+              <Link href={`/companies/${company.id}`} className="block min-w-40 max-w-64 break-words font-semibold text-primary-2 hover:underline">
                 {company.name}
               </Link>
             </td>
-            <td className="px-3 py-2 text-slate-600">{company.domain ?? '-'}</td>
-            <td className="px-3 py-2 text-slate-600">{company.industry ?? '-'}</td>
-            <td className="px-3 py-2 text-slate-600">{company.sizeBand ?? '-'}</td>
-            <td className="px-3 py-2 text-slate-600">{company.contactCount}</td>
-            <td className="px-3 py-2 text-slate-600">{company.leadCount}</td>
-            <td className="px-3 py-2 text-slate-500">{formatDateTime(company.updatedAt)}</td>
+            <td className="px-3 py-2 text-muted">{company.domain ?? '-'}</td>
+            <td className="px-3 py-2 text-muted">{company.industry ?? '-'}</td>
+            <td className="px-3 py-2 text-muted">{company.sizeBand ?? '-'}</td>
+            <td className="px-3 py-2 text-muted">{company.contactCount}</td>
+            <td className="px-3 py-2 text-muted">{company.leadCount}</td>
+            <td className="px-3 py-2 text-muted">{formatDateTime(company.updatedAt)}</td>
           </tr>
         ))}
       </tbody>
