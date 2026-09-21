@@ -8,6 +8,7 @@ import {
   ERROR_CONFLICT,
   ERROR_FORBIDDEN,
   ERROR_GENERIC,
+  FLAG_LABEL,
   InsightRequestError,
   MESSAGE_STATUS_TEXT,
   NBA_LABELS,
@@ -20,6 +21,7 @@ import {
   canSubmitApprove,
   canSubmitReject,
   describeApiError,
+  flagLabel,
   formatDraftCount,
   formatDue,
   formatHistoryScore,
@@ -598,6 +600,26 @@ describe('label maps cover every enum key', () => {
     }
   })
 
+  it('FLAG_LABEL covers every CopilotOutputSchema flag', () => {
+    const flags = ['INSUFFICIENT_CONTEXT', 'PROMPT_INJECTION_SUSPECTED', 'PRICING_REQUESTED', 'COMPLAINT', 'OUT_OF_SCOPE'] as const
+    for (const flag of flags) {
+      expect(typeof FLAG_LABEL[flag]).toBe('string')
+      expect(FLAG_LABEL[flag].length).toBeGreaterThan(0)
+    }
+  })
+
+  it('flagLabel returns the Thai label for every known flag', () => {
+    expect(flagLabel('INSUFFICIENT_CONTEXT')).toBe(FLAG_LABEL.INSUFFICIENT_CONTEXT)
+    expect(flagLabel('PROMPT_INJECTION_SUSPECTED')).toBe(FLAG_LABEL.PROMPT_INJECTION_SUSPECTED)
+    expect(flagLabel('PRICING_REQUESTED')).toBe(FLAG_LABEL.PRICING_REQUESTED)
+    expect(flagLabel('COMPLAINT')).toBe(FLAG_LABEL.COMPLAINT)
+    expect(flagLabel('OUT_OF_SCOPE')).toBe(FLAG_LABEL.OUT_OF_SCOPE)
+  })
+
+  it('flagLabel falls back to the raw value for an unknown flag', () => {
+    expect(flagLabel('SOME_NEW_FLAG')).toBe('SOME_NEW_FLAG')
+  })
+
   it('MESSAGE_STATUS_TEXT covers every MessageStatus, including LOGGED', () => {
     const statuses = ['SENT', 'QUEUED', 'FAILED', 'RECEIVED', 'LOGGED'] as const
     for (const status of statuses) {
@@ -606,8 +628,8 @@ describe('label maps cover every enum key', () => {
     }
   })
 
-  it('MESSAGE_STATUS_TEXT.QUEUED names the Retry button and the 1 minute wait, since MessageBubble shows Retry immediately but retry returns 409 within 60s of updatedAt', () => {
-    expect(MESSAGE_STATUS_TEXT.QUEUED).toContain('Retry')
+  it('MESSAGE_STATUS_TEXT.QUEUED names the retry button and the 1 minute wait, since MessageBubble shows the retry button immediately but retry returns 409 within 60s of updatedAt', () => {
+    expect(MESSAGE_STATUS_TEXT.QUEUED).toContain('ส่งอีกครั้ง')
     expect(MESSAGE_STATUS_TEXT.QUEUED).toContain('1 นาที')
   })
 

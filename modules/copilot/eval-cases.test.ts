@@ -79,7 +79,7 @@ describe('checkExpectations', () => {
   function makeResult(overrides: Partial<CopilotResult> = {}): CopilotResult {
     return {
       output: {
-        summary: 'ok',
+        summary: 'สรุปผลลัพธ์การประเมิน',
         score: 90,
         scoreReasons: ['r'],
         nextBestAction: { type: 'SEND_PROPOSAL', title: 't', rationale: 'r', suggestedStage: 'PROPOSAL', dueInDays: 3 },

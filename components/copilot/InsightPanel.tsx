@@ -73,6 +73,7 @@ import {
   canSubmitApprove,
   canSubmitReject,
   describeApiError,
+  flagLabel,
   formatDraftCount,
   formatDue,
   formatHistoryScore,
@@ -764,7 +765,7 @@ function SuggestionSection({
           <ul className="flex flex-wrap gap-2">
             {current.flags.map((flag, index) => (
               <li key={`${index}-${flag}`}>
-                <Badge tone="amber">{flag}</Badge>
+                <Badge tone="amber">{flagLabel(flag)}</Badge>
               </li>
             ))}
           </ul>

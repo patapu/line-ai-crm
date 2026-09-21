@@ -6,7 +6,7 @@ import path from 'node:path'
 // importable from scripts/eval-copilot.ts, which runs the module tree
 // outside a request context. See docs/design.md section 4.
 
-export const PROMPT_VERSION = 'crm-copilot-v2'
+export const PROMPT_VERSION = 'crm-copilot-v3'
 
 let cached: string | null = null
 

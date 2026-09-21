@@ -10,9 +10,9 @@ what the code does, once it does it.
 ## Purpose
 
 Given a lead's CRM context, the copilot produces one suggestion for the sales team: a
-plain-English summary of where the lead stands, a 0-100 qualification score with the
-reasons behind it, a next-best action, and an optional draft LINE reply in the customer's
-language. It is a suggestion only: `requestInsight` writes it to `AiSuggestion` as
+plain Thai summary of where the lead stands (the CRM UI the sales team reads is Thai), a
+0-100 qualification score with the reasons behind it, a next-best action, and an optional
+draft LINE reply in the customer's language. It is a suggestion only: `requestInsight` writes it to `AiSuggestion` as
 `PENDING`, and nothing reaches the `Lead` row or LINE until a human approves it through
 `POST /api/suggestions/[id]/approve` (see `docs/design.md` sections 4 and 5B).
 
@@ -282,12 +282,12 @@ single try/catch and never throws. It checks these cases, in order:
 5. A successful model result always passes through `applyGuardrails`; if the draft is
    blocked, the draft is replaced with the rule-based template, `errorCode:
    GUARDRAIL_BLOCKED` is set, and `lowConfidence: true`; `source` stays `MODEL` and
-   `model` / `promptVersion` (`crm-copilot-v2`) are still the ones the model actually used
+   `model` / `promptVersion` (`crm-copilot-v3`) are still the ones the model actually used
 6. `confidence < COPILOT_MIN_CONFIDENCE` or an `INSUFFICIENT_CONTEXT` flag sets
    `lowConfidence: true`, even when `source` is `MODEL` and nothing was blocked
 7. Every fallback result (rules 1 to 4) has `source: FALLBACK`, `lowConfidence: true`,
    `confidence: 0.3`, `model: null`, and `promptVersion: 'rules-v1'` (never
-   `crm-copilot-v2`, since no prompt was sent), so a caller can always tell a rule-based
+   `crm-copilot-v3`, since no prompt was sent), so a caller can always tell a rule-based
    suggestion from a model one just by looking at `model`
 
 The wrapper never throws and the `insights` route never answers with a 5xx because of the

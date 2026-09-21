@@ -41,6 +41,13 @@ const ACTIVITY_TYPES = [
 
 const ERROR_CODES = ['TIMEOUT', 'PROVIDER_ERROR', 'SCHEMA_INVALID', 'NO_API_KEY', 'GUARDRAIL_BLOCKED'] as const
 
+// The CRM UI the sales team reads is Thai, so summary/scoreReasons/nextBestAction
+// are always written in Thai regardless of reply locale (skills/crm-copilot/
+// instructions.md section 3); only draftReply.text follows the reply locale.
+// Checked unconditionally in checkExpectations below, for every case in
+// cases.json including english-customer, whose draft stays English.
+const THAI_SCRIPT_RE = /[฀-๿]/
+
 // Matches CopilotOutputSchema.flags / NextBestActionSchema.type in
 // lib/contracts/copilot.ts exactly, so a typo in an eval case's `expect`
 // block fails to parse instead of silently never matching.
@@ -210,6 +217,10 @@ export function checkExpectations(c: EvalCase, result: CopilotResult): string[] 
 
   if (!expect.errorCodeIn.includes(result.errorCode)) {
     failures.push(`expected errorCode in [${expect.errorCodeIn.join(', ')}], got ${result.errorCode}`)
+  }
+
+  if (!THAI_SCRIPT_RE.test(output.summary)) {
+    failures.push('expected summary to contain Thai script')
   }
 
   if (expect.scoreMin !== undefined && output.score < expect.scoreMin) {
