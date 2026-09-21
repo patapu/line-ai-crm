@@ -25,6 +25,50 @@ Newest entries go at the top.
 
 ## Log
 
+### 2026-09-21, Lane A
+
+**Sample tasks / prompts**
+- "ดู theme และ ux/ui ของ product ล่าสุด ที่ Jenosize เพื่อเอามาปรับ theme และ ux/ui" (look at the theme
+  and UX/UI of Jenosize's latest product and adapt our theme and UX/UI to match it).
+- "เริ่มเลย ใช้ Nunito คู่ IBM Plex Sans Thai Looped" (go ahead, use Nunito paired with IBM Plex Sans Thai
+  Looped).
+- The session ran as an orchestrator-planned pipeline: code-explorer read the Jenosize Marketing Cloud
+  page's CSS for its palette (#0042ED primary, #F56700 accent) and font (GothamRounded); ui-designer
+  wrote a design spec with WCAG contrast estimates; code-planner and code-implementer applied the
+  tokens in app/globals.css, loaded the fonts through next/font in app/layout.tsx, and restyled
+  components/ui and components/crm, plus two new components, PageHeader and NavLinks. code-tester and
+  code-reviewer ran three review rounds. Pakorn then chose all the follow ups in one go: fix the review
+  minors, commit and open a PR, run a UX audit, file CRs for lanes B and C, and add this log entry.
+
+**What the human reviewed or rejected**
+- Pakorn picked the fonts himself, Nunito paired with IBM Plex Sans Thai Looped, replacing GothamRounded
+  from the reference site, which is a licensed font the project cannot use.
+- Pakorn approved the retheme overall and chose to fix the review minors before committing, rather than
+  commit first and fix later.
+- The PR (https://github.com/patapu/line-ai-crm/pull/12, commit 7f5d2df) was first going to branch off
+  local main, but that copy carried an unpushed lane D deploy commit (fbc9505). Pakorn rejected that and
+  asked for a rebase onto origin/main instead.
+- For the UX check, Pakorn chose "test ใน browser ดีกว่า" (better to test in the browser) over a static
+  review, so ux-auditor drove the in-app browser.
+- Pakorn logged into the app himself for the browser session; no agent read or typed his credentials.
+- Pakorn approved filing CR-5 (lane B, InsightPanel) and CR-6 (lane C, Composer) so the other lanes pick
+  up the new theme.
+
+**One change made after human inspection**
+- Before: the PR was going to be opened from local main, which included lane D's unpushed deploy commit
+  fbc9505. After: Pakorn had the branch rebased onto origin/main instead, so PR #12 carries only the lane
+  A retheme changes and leaves fbc9505 out.
+- Also from this session, not from a human: while reading the reference site, the agent clicked "ACCEPT
+  ALL" on its cookie banner instead of the privacy-preserving choice, and reported the mistake instead of
+  hiding it. Separately, ux-auditor could not see a tab that had been opened outside its own Chrome tab
+  group, and it stopped and asked instead of opening a new tab itself. A review round also found a Card
+  padding override that had no effect, because the project's `cn` helper has no tailwind-merge and the
+  override was silently dropped.
+- Verification: typecheck, lint, 1235 tests, and the build all passed. The browser UX audit came back
+  NEEDS WORK: 0 critical, 2 major (the mobile lead table squeezes its columns instead of scrolling, and
+  the 8 filters push the table below the fold at 360px), and 6 minor findings. The full report is a local
+  UX report, not part of this repo.
+
 ### 2026-09-17, Lane B
 
 **Sample tasks / prompts**
